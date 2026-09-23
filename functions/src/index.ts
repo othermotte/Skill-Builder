@@ -16,7 +16,7 @@ const DAILY_HELPER_AI_LIMIT = 12;
 const SESSION_LIMIT_EXEMPT_EMAILS = new Set([
   'gary@gardenersnotmechanics.com',
 ]);
-const LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+const LIVE_MODEL = 'gemini-3.8-live';
 const ANALYSIS_MODEL = 'gemini-3.5-flash';
 const TEXT_SESSION_DURATION_MS = 30 * 60 * 1000;
 const MAX_TEXT_TRANSCRIPT_ENTRIES = 60;
@@ -64,6 +64,11 @@ async function recordGeminiUsage(
   limit: number
 ) {
   assertAuth(request);
+
+  // Local voice tests should never write quota counters or logs to production.
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    return { count: 0, limit, remaining: limit };
+  }
 
   const db = getFirestore();
   const uid = request.auth.uid;

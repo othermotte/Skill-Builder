@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
 /**
  * FIREBASE CONFIGURATION - LEADERSHIP SKILL BUILDER
@@ -36,3 +36,7 @@ export const db = initializeFirestore(app, {
  * calls securely server-side. The real API key never reaches the browser.
  */
 export const functions = getFunctions(app, "europe-west1");
+
+if (import.meta.env.DEV && import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === 'true') {
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+}

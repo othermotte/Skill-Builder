@@ -201,14 +201,14 @@ export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = fa
       });
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-3.1-flash-live-preview',
+        model: 'gemini-3.8-live',
         callbacks: {
           onopen: () => {
             console.log("LiveSession: Connection opened.");
             statusRef.current = 'active';
             setStatus('active');
             setErrorMessage(null);
-            // Gemini 3.1 Live accepts conversational text through the real-time
+            // Gemini Live accepts conversational text through the real-time
             // input channel. Client content is reserved for seeded history.
             sessionPromiseRef.current?.then((session) => {
               try {

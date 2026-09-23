@@ -63,7 +63,7 @@ export const continueTextConversation = async (
 export const conversationModelForMedium = (medium: InteractionMedium) =>
   medium === 'text'
     ? 'gemini-3.5-flash'
-    : 'gemini-3.1-flash-live-preview';
+    : 'gemini-3.8-live';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
