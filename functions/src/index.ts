@@ -17,7 +17,7 @@ const SESSION_LIMIT_EXEMPT_EMAILS = new Set([
   'gary@gardenersnotmechanics.com',
 ]);
 const LIVE_MODEL = 'gemini-3.8-live';
-const ANALYSIS_MODEL = 'gemini-3.5-flash';
+const ANALYSIS_MODEL = 'gemini-3.6-flash';
 const TEXT_SESSION_DURATION_MS = 30 * 60 * 1000;
 const MAX_TEXT_TRANSCRIPT_ENTRIES = 60;
 const MAX_TEXT_TRANSCRIPT_CHARS = 60000;

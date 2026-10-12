@@ -294,7 +294,7 @@ ${memoryList}
         conversationModel: interactionMedium === 'text'
           ? (textConversationModel || conversationModelForMedium('text'))
           : conversationModelForMedium('voice'),
-        analysisModel: 'gemini-3.5-flash',
+        analysisModel: 'gemini-3.6-flash',
         timestamp: new Date().toISOString(),
         status: 'completed'
       }, mode === 'diagnostic', mode === 'tutorial' ? true : isAiConcluded);
@@ -309,7 +309,7 @@ ${memoryList}
         conversationModel: interactionMedium === 'text'
           ? (textConversationModel || conversationModelForMedium('text'))
           : conversationModelForMedium('voice'),
-        analysisModel: 'gemini-3.5-flash',
+        analysisModel: 'gemini-3.6-flash',
         timestamp: new Date().toISOString(),
         status: 'completed'
       }, mode === 'diagnostic', isAiConcluded);
