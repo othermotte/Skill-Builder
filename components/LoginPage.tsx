@@ -36,7 +36,7 @@ export const LoginPage: React.FC = () => {
         let saved: string | null = null;
         try { saved = sessionStorage.getItem('homepageVariant'); } catch {}
         const choice = chooseHomepageVariant(location.search, saved, Math.random());
-        try { sessionStorage.setItem('homepageVariant', choice); const code = new URLSearchParams(location.search).get('organisationCode'); if (code) sessionStorage.setItem('organisationCode', code); } catch {}
+        try { sessionStorage.setItem('homepageVariant', choice); } catch {}
         return choice;
     });
     const [authMode, setAuthMode] = useState<'login' | 'signup' | 'reset'>('login');

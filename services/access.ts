@@ -13,18 +13,27 @@ export interface Organisation {
   name: string;
   expiresAt: number | null;
   revokedAt: number | null;
-  domains: string[];
+  approvedCount: number;
   memberLimit: number | null;
-  memberCount: number;
 }
 const call = async <T>(name: string, data: unknown = {}): Promise<T> =>
   (await httpsCallable<unknown, T>(functions, name)(data)).data;
 export const getAccessAccount = () => call<AccessAccount>("getAccessAccount");
 export const chooseFreeScenario = (scenarioId: string) =>
   call<AccessAccount>("chooseFreeScenario", { scenarioId });
-export const redeemOrganisationCode = (code: string) =>
-  call<AccessAccount>("redeemOrganisationCode", { code });
 export const listOrganisations = () =>
   call<Organisation[]>("listOrganisations");
 export const saveOrganisation = (data: unknown) =>
-  call<{ id: string; code?: string }>("saveOrganisation", data);
+  call<{ id: string }>("saveOrganisation", data);
+
+export const listApprovedMembers = (organisationId: string) =>
+  call<{ email: string }[]>("listApprovedMembers", { organisationId });
+export const updateApprovedMembers = (
+  organisationId: string,
+  action: "add" | "remove",
+  emails: string[],
+) =>
+  call<{ changed: number; unchanged: number; approvedCount: number }>(
+    "updateApprovedMembers",
+    { organisationId, action, emails },
+  );

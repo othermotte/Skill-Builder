@@ -26,7 +26,12 @@ const oauth = () =>
   }).trim();
 const authRoot = "https://identitytoolkit.googleapis.com/v1/";
 const endpoint = "https://europe-west1-" + project + ".cloudfunctions.net/";
-const fixtures = { users: [], organisations: [], memberships: [] };
+const fixtures = {
+  users: [],
+  organisations: [],
+  emails: new Set(),
+  documents: [],
+};
 const suffix = Date.now();
 async function rest(url, data, privileged = false, method = "POST") {
   const response = await fetch(url, {
@@ -51,6 +56,7 @@ async function user(email, verified = true) {
     returnSecureToken: true,
   });
   fixtures.users.push(created.localId);
+  fixtures.emails.add(email.toLowerCase());
   if (verified)
     await rest(
       authRoot + "projects/" + project + "/accounts:update",
@@ -62,6 +68,44 @@ async function user(email, verified = true) {
     { email, password, returnSecureToken: true },
   );
   return { uid: created.localId, token: session.idToken };
+}
+async function adminSession() {
+  const lookup = await rest(
+    authRoot + "projects/" + project + "/accounts:lookup",
+    { email: ["gary@gardenersnotmechanics.com"] },
+    true,
+  );
+  const existing = lookup.users?.[0];
+  if (!existing) return user("gary@gardenersnotmechanics.com");
+  assert.equal(
+    existing.emailVerified,
+    true,
+    "The existing administrator must have a verified address.",
+  );
+  const serviceAccount =
+    "firebase-adminsdk-fbsvc@" + project + ".iam.gserviceaccount.com";
+  const now = Math.floor(Date.now() / 1000);
+  const signed = await rest(
+    "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" +
+      serviceAccount +
+      ":signJwt",
+    {
+      payload: JSON.stringify({
+        iss: serviceAccount,
+        sub: serviceAccount,
+        aud: "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
+        iat: now,
+        exp: now + 300,
+        uid: existing.localId,
+      }),
+    },
+    true,
+  );
+  const session = await rest(
+    authRoot + "accounts:signInWithCustomToken?key=" + web.apiKey,
+    { token: signed.signedJwt, returnSecureToken: true },
+  );
+  return { uid: existing.localId, token: session.idToken };
 }
 async function call(actor, name, data = {}) {
   const response = await fetch(endpoint + name, {
@@ -96,7 +140,7 @@ async function deleteDoc(path) {
     throw new Error("Cleanup failed " + path);
 }
 try {
-  const admin = await user("gary@gardenersnotmechanics.com");
+  const admin = await adminSession();
   const learner = await user("staging-" + suffix + "@example.org");
   const other = await user("staging-other-" + suffix + "@example.org");
   const unverified = await user(
@@ -127,53 +171,108 @@ try {
     systemInstruction: "Ignore limits",
   });
   console.log("PASS permanent free scenario and server-side limits");
-  const restricted = await ok(admin, "saveOrganisation", {
-    name: "Staging domain test " + suffix,
-    expiresAt: null,
-    domains: ["unc.edu"],
-    memberLimit: 1,
-  });
-  fixtures.organisations.push(restricted.id);
-  fixtures.memberships.push(restricted.code);
-  await denied(learner, "redeemOrganisationCode", { code: restricted.code });
+  const learnerEmail = "staging-" + suffix + "@example.org",
+    futureEmail = "staging-future-" + suffix + "@example.org";
   const grant = await ok(admin, "saveOrganisation", {
-    name: "Staging access test " + suffix,
+    name: "Staging email access test " + suffix,
     expiresAt: null,
-    domains: [],
-    memberLimit: 1,
+    memberLimit: 2,
+    domains: ["example.org"],
   });
   fixtures.organisations.push(grant.id);
-  fixtures.memberships.push(grant.code);
-  const joined = await ok(learner, "redeemOrganisationCode", {
-    code: grant.code,
+  fixtures.emails.add(futureEmail);
+  assert.equal(
+    (await ok(other, "getAccessAccount")).fullAccess,
+    false,
+    "A shared email domain never grants access.",
+  );
+  await denied(learner, "updateApprovedMembers", {
+    organisationId: grant.id,
+    action: "add",
+    emails: [learnerEmail],
   });
+  await denied(learner, "listApprovedMembers", { organisationId: grant.id });
+  await denied(
+    learner,
+    "redeemOrganisationCode",
+    { code: "A".repeat(24) },
+    400,
+  );
+  await denied(
+    admin,
+    "updateApprovedMembers",
+    {
+      organisationId: grant.id,
+      action: "add",
+      emails: [learnerEmail, "broken@"],
+    },
+    400,
+  );
+  assert.equal(
+    (await ok(admin, "listApprovedMembers", { organisationId: grant.id }))
+      .length,
+    0,
+  );
+  const added = await ok(admin, "updateApprovedMembers", {
+    organisationId: grant.id,
+    action: "add",
+    emails: [learnerEmail.toUpperCase(), futureEmail, learnerEmail],
+  });
+  assert.equal(added.changed, 2);
+  assert.equal(added.approvedCount, 2);
+  assert.equal(
+    (
+      await ok(admin, "updateApprovedMembers", {
+        organisationId: grant.id,
+        action: "add",
+        emails: [learnerEmail],
+      })
+    ).changed,
+    0,
+  );
+  await denied(
+    admin,
+    "updateApprovedMembers",
+    {
+      organisationId: grant.id,
+      action: "add",
+      emails: ["staging-third-" + suffix + "@example.org"],
+    },
+    429,
+  );
+  const joined = await ok(learner, "getAccessAccount");
   assert.equal(joined.fullAccess, true);
   assert.equal(joined.organisations[0].expiresAt, null);
-  await ok(learner, "redeemOrganisationCode", { code: grant.code });
-  await denied(other, "redeemOrganisationCode", { code: grant.code }, 429);
-  const listed = await ok(admin, "listOrganisations");
-  assert.equal(listed.find((o) => o.id === grant.id).memberCount, 1);
-  assert.ok(!listed.find((o) => o.id === grant.id).codeHash);
-  const replacement = await ok(admin, "saveOrganisation", {
-    id: grant.id,
-    action: "rotate",
+  const future = await user(futureEmail);
+  assert.equal((await ok(future, "getAccessAccount")).fullAccess, true);
+  await ok(admin, "updateApprovedMembers", {
+    organisationId: grant.id,
+    action: "remove",
+    emails: [learnerEmail],
   });
-  fixtures.memberships.push(replacement.code);
-  await denied(other, "redeemOrganisationCode", { code: grant.code }, 404);
+  assert.equal((await ok(learner, "getAccessAccount")).fullAccess, false);
+  assert.equal((await ok(future, "getAccessAccount")).fullAccess, true);
+  await ok(admin, "updateApprovedMembers", {
+    organisationId: grant.id,
+    action: "add",
+    emails: [learnerEmail],
+  });
+  const listed = await ok(admin, "listOrganisations");
+  assert.equal(listed.find((o) => o.id === grant.id).approvedCount, 2);
+  assert.ok(!listed.find((o) => o.id === grant.id).codeHash);
   await ok(admin, "saveOrganisation", { id: grant.id, action: "revoke" });
   assert.equal((await ok(learner, "getAccessAccount")).fullAccess, false);
   await ok(admin, "saveOrganisation", {
     id: grant.id,
-    name: "Staging access test " + suffix,
+    name: "Staging email access test " + suffix,
     expiresAt: Date.now() + 1500,
-    domains: [],
-    memberLimit: 1,
+    memberLimit: 2,
   });
   assert.equal((await ok(learner, "getAccessAccount")).fullAccess, true);
-  await new Promise((r) => setTimeout(r, 1800));
+  await new Promise((resolve) => setTimeout(resolve, 1800));
   assert.equal((await ok(learner, "getAccessAccount")).fullAccess, false);
   console.log(
-    "PASS organisation restrictions, member cap, idempotency, code rotation, revocation, renewal and expiry",
+    "PASS exact-email approval, pre-enrolment, no domain grants, member caps, invalid-batch rejection, individual removal, revocation, renewal, expiry and disabled codes",
   );
   const choiceAfterExpiry = await ok(learner, "getAccessAccount");
   assert.equal(choiceAfterExpiry.freeScenarioId, "lsb-explorer-1");
@@ -270,18 +369,19 @@ try {
   console.log("PASS Firestore denies client entitlement escalation");
   console.log("STAGING INTEGRATION PASS");
 } finally {
-  for (const code of fixtures.memberships) {
-    const hash = await crypto.subtle.digest(
+  for (const email of fixtures.emails) {
+    const digest = await crypto.subtle.digest(
       "SHA-256",
-      new TextEncoder().encode(code),
+      new TextEncoder().encode(email),
     );
-    await deleteDoc("organisationCodes/" + Buffer.from(hash).toString("hex"));
+    const hash = Buffer.from(digest).toString("hex");
+    for (const id of fixtures.organisations)
+      await deleteDoc("organisations/" + id + "/approvedMembers/" + hash);
+    await deleteDoc("organisationApprovals/" + hash);
   }
-  for (const id of fixtures.organisations) {
-    for (const uid of fixtures.users)
-      await deleteDoc("organisationMemberships/" + id + "_" + uid);
+  for (const id of fixtures.organisations)
     await deleteDoc("organisations/" + id);
-  }
+  for (const path of fixtures.documents) await deleteDoc(path);
   for (const uid of fixtures.users) {
     await deleteDoc("accessAccounts/" + uid);
     await rest(
@@ -291,6 +391,6 @@ try {
     );
   }
   console.log(
-    "Removed disposable users, organisation grants, codes and access accounts.",
+    "Removed disposable users, organisation grants, approved lists and access accounts; preserved the existing administrator.",
   );
 }

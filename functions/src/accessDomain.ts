@@ -3,9 +3,8 @@ export interface OrganisationGrant {
   name: string;
   expiresAt: number | null;
   revokedAt: number | null;
-  domains: string[];
   memberLimit: number | null;
-  memberCount: number;
+  approvedCount?: number;
 }
 export function activeGrant(
   grant: OrganisationGrant,
@@ -14,26 +13,6 @@ export function activeGrant(
   return (
     !grant.revokedAt && (grant.expiresAt === null || grant.expiresAt > now)
   );
-}
-export function normaliseDomains(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > 20)
-    throw new Error("Provide up to 20 email domains.");
-  const domains = [
-    ...new Set(
-      value.map((v) => String(v).trim().toLowerCase()).filter(Boolean),
-    ),
-  ];
-  if (
-    domains.some(
-      (d) => !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/.test(d),
-    )
-  )
-    throw new Error("Use email domains such as unc.edu, without @.");
-  return domains;
-}
-export function emailAllowed(email: string, domains: string[]): boolean {
-  const domain = email.toLowerCase().split("@")[1];
-  return domains.length === 0 || domains.includes(domain);
 }
 export function selectScenario(
   existing: string | null,

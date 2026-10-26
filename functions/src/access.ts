@@ -1,12 +1,8 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { createHash, randomBytes } from "crypto";
-import {
-  activeGrant,
-  emailAllowed,
-  normaliseDomains,
-  selectScenario,
-} from "./accessDomain";
+import { createHash } from "crypto";
+import { normaliseEmail } from "./emailRoster";
+import { activeGrant, selectScenario } from "./accessDomain";
 const options = {
   region: "europe-west1" as const,
   maxInstances: 3,
@@ -57,9 +53,18 @@ export async function readAccess(request: any) {
   const uid = user(request);
   const snap = await accountRef(uid).get();
   const account = snap.data() || {};
-  const orgIds: string[] = Array.isArray(account.organisationIds)
-    ? account.organisationIds.slice(0, 20)
-    : [];
+  const email = normaliseEmail(String(request.auth.token.email || ""));
+  const approval = await getFirestore()
+    .collection("organisationApprovals")
+    .doc(emailHash(email))
+    .get();
+  // Membership comes only from an administrator-approved exact address.
+  // Legacy code memberships and domain rules never grant access.
+  const orgIds: string[] =
+    approval.data()?.email === email &&
+    Array.isArray(approval.data()?.organisationIds)
+      ? approval.data()!.organisationIds.slice(0, 20)
+      : [];
   const grants = orgIds.length
     ? await getFirestore().getAll(
         ...orgIds.map((id) =>
@@ -131,7 +136,7 @@ export async function checkPracticeAccess(
   if (!access.fullAccess && access.freeScenarioId !== scenarioId)
     throw new HttpsError(
       "permission-denied",
-      "Choose your free scenario, or redeem organisation access.",
+      "This scenario is not included in your free account.",
     );
   const microSkillId = String(context?.microSkillId || "");
   if (
@@ -214,8 +219,8 @@ export async function saveFreeRecommendations(
     return suggestions;
   });
 }
-function codeHash(code: string) {
-  return createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
+function emailHash(email: string) {
+  return createHash("sha256").update(email).digest("hex");
 }
 function expiry(value: unknown) {
   if (value === null) return null;
@@ -256,138 +261,178 @@ export const saveOrganisation = onCall(options, async (request) => {
     await ref.update({ revokedAt: Date.now() });
     return { id };
   }
-  if (data.action === "rotate") {
-    const code = randomBytes(12).toString("hex").toUpperCase();
-    const hash = codeHash(code);
-    await db.runTransaction(async (tx) => {
-      const old = await tx.get(ref);
-      if (!old.exists)
-        throw new HttpsError("not-found", "Organisation not found.");
-      if (old.data()?.codeHash)
-        tx.delete(db.collection("organisationCodes").doc(old.data()!.codeHash));
-      tx.update(ref, { codeHash: hash });
-      tx.set(db.collection("organisationCodes").doc(hash), {
-        organisationId: id,
-      });
-    });
-    return { id, code };
-  }
+  if (data.action)
+    throw new HttpsError(
+      "invalid-argument",
+      "Unsupported organisation action.",
+    );
   const name = String(data.name || "").trim();
   if (!name || name.length > 100)
     throw new HttpsError(
       "invalid-argument",
       "Provide an organisation name of up to 100 characters.",
     );
-  let domains: string[];
-  try {
-    domains = normaliseDomains(data.domains || []);
-  } catch (e: any) {
-    throw new HttpsError("invalid-argument", e.message);
-  }
   const memberLimit =
-    data.memberLimit === null ? null : Number(data.memberLimit);
+    data.memberLimit == null ? null : Number(data.memberLimit);
   if (
     memberLimit !== null &&
     (!Number.isSafeInteger(memberLimit) ||
       memberLimit < 1 ||
-      memberLimit > 100000)
+      memberLimit > 5000)
   )
     throw new HttpsError(
       "invalid-argument",
-      "Set a member limit between 1 and 100,000 or leave it unlimited.",
+      "Set a member limit between 1 and 5,000 or leave it unlimited.",
     );
   const expiresAt = expiry(data.expiresAt);
-  const code = data.id ? null : randomBytes(12).toString("hex").toUpperCase();
   await db.runTransaction(async (tx) => {
     const old = await tx.get(ref);
     if (data.id && !old.exists)
       throw new HttpsError("not-found", "Organisation not found.");
+    if (
+      memberLimit !== null &&
+      memberLimit < Number(old.data()?.approvedCount || 0)
+    )
+      throw new HttpsError(
+        "failed-precondition",
+        "Remove approved addresses before lowering the member limit below the current list size.",
+      );
+    if (old.data()?.codeHash)
+      tx.delete(db.collection("organisationCodes").doc(old.data()!.codeHash));
     tx.set(
       ref,
       {
         name,
-        domains,
         memberLimit,
         expiresAt,
         revokedAt: null,
+        domains: [],
+        codeHash: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
         ...(old.exists
           ? {}
           : {
-              memberCount: 0,
+              approvedCount: 0,
               createdAt: FieldValue.serverTimestamp(),
               createdBy: request.auth!.uid,
-              codeHash: codeHash(code!),
             }),
       },
       { merge: true },
     );
-    if (code)
-      tx.set(db.collection("organisationCodes").doc(codeHash(code)), {
-        organisationId: id,
-      });
   });
-  return { id, ...(code ? { code } : {}) };
+  return { id };
 });
-export const redeemOrganisationCode = onCall(options, async (request) => {
-  const uid = user(request);
-  const code = String(request.data?.code || "")
-    .trim()
-    .toUpperCase();
-  if (!/^[A-F0-9]{24}$/.test(code))
+function organisationId(value: unknown): string {
+  const id = String(value || "");
+  if (!/^[a-zA-Z0-9_-]{1,160}$/.test(id))
+    throw new HttpsError("invalid-argument", "Choose an organisation.");
+  return id;
+}
+export const listApprovedMembers = onCall(options, async (request) => {
+  admin(request);
+  const ref = getFirestore()
+    .collection("organisations")
+    .doc(organisationId(request.data?.organisationId));
+  if (!(await ref.get()).exists)
+    throw new HttpsError("not-found", "Organisation not found.");
+  const snap = await ref
+    .collection("approvedMembers")
+    .orderBy("email")
+    .limit(5000)
+    .get();
+  return snap.docs.map((doc) => ({ email: doc.data().email }));
+});
+export const updateApprovedMembers = onCall(options, async (request) => {
+  admin(request);
+  const id = organisationId(request.data?.organisationId),
+    action = request.data?.action;
+  if (action !== "add" && action !== "remove")
+    throw new HttpsError("invalid-argument", "Choose add or remove.");
+  const input = request.data?.emails;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 200)
     throw new HttpsError(
       "invalid-argument",
-      "Enter a valid organisation code.",
+      "Supply between 1 and 200 addresses per batch.",
     );
-  const db = getFirestore();
-  await db.runTransaction(async (tx) => {
-    const codeSnap = await tx.get(
-      db.collection("organisationCodes").doc(codeHash(code)),
+  let emails: string[];
+  try {
+    emails = [...new Set(input.map(normaliseEmail))];
+  } catch {
+    throw new HttpsError(
+      "invalid-argument",
+      "Every address must be a valid email address.",
     );
-    if (!codeSnap.exists)
-      throw new HttpsError("not-found", "This code is no longer available.");
-    const ref = db
-      .collection("organisations")
-      .doc(codeSnap.data()!.organisationId);
-    const org = await tx.get(ref);
-    const membership = db
-      .collection("organisationMemberships")
-      .doc(`${ref.id}_${uid}`);
-    const member = await tx.get(membership);
-    const account = await tx.get(accountRef(uid));
-    const grant = org.data() as any;
-    if (!org.exists || !activeGrant(grant) || grant.codeHash !== codeHash(code))
-      throw new HttpsError(
-        "failed-precondition",
-        "This organisation grant has expired or been revoked.",
-      );
-    if (!emailAllowed(String(request.auth!.token.email || ""), grant.domains))
-      throw new HttpsError(
-        "permission-denied",
-        "Your verified email does not match this organisation.",
-      );
-    if (member.exists) return;
-    if ((account.data()?.organisationIds || []).length >= 20)
+  }
+  const db = getFirestore(),
+    orgRef = db.collection("organisations").doc(id);
+  return db.runTransaction(async (tx) => {
+    const org = await tx.get(orgRef);
+    if (!org.exists)
+      throw new HttpsError("not-found", "Organisation not found.");
+    const refs = emails.map((email) =>
+      orgRef.collection("approvedMembers").doc(emailHash(email)),
+    );
+    const indexRefs = emails.map((email) =>
+      db.collection("organisationApprovals").doc(emailHash(email)),
+    );
+    const records = await tx.getAll(...refs, ...indexRefs);
+    const members = records.slice(0, emails.length),
+      indexes = records.slice(emails.length);
+    const changed = emails.filter((_, i) =>
+      action === "add" ? !members[i].exists : members[i].exists,
+    );
+    const count =
+      Math.max(0, Number(org.data()?.approvedCount || 0)) +
+      (action === "add" ? changed.length : -changed.length);
+    const limit = Math.min(5000, org.data()?.memberLimit ?? 5000);
+    if (action === "add" && count > limit)
       throw new HttpsError(
         "resource-exhausted",
-        "Your organisation membership limit has been reached.",
+        "This list exceeds the organisation member limit. Increase the limit or reduce the list before adding these addresses.",
       );
-    if (grant.memberLimit !== null && grant.memberCount >= grant.memberLimit)
-      throw new HttpsError(
-        "resource-exhausted",
-        "This organisation has no remaining places.",
-      );
-    tx.set(membership, {
-      uid,
-      organisationId: ref.id,
-      joinedAt: FieldValue.serverTimestamp(),
+    emails.forEach((email, i) => {
+      if (!changed.includes(email)) return;
+      const ids = indexes[i].data()?.organisationIds || [];
+      if (action === "add") {
+        if (!ids.includes(id) && ids.length >= 20)
+          throw new HttpsError(
+            "resource-exhausted",
+            "An address is already approved for 20 organisations.",
+          );
+        tx.set(refs[i], {
+          email,
+          addedAt: FieldValue.serverTimestamp(),
+          addedBy: request.auth!.uid,
+        });
+        tx.set(
+          indexRefs[i],
+          { email, organisationIds: FieldValue.arrayUnion(id) },
+          { merge: true },
+        );
+      } else {
+        tx.delete(refs[i]);
+        const remaining = ids.filter((existing: string) => existing !== id);
+        if (remaining.length)
+          tx.set(indexRefs[i], { email, organisationIds: remaining });
+        else tx.delete(indexRefs[i]);
+      }
     });
-    tx.update(ref, { memberCount: grant.memberCount + 1 });
-    tx.set(
-      accountRef(uid),
-      { organisationIds: FieldValue.arrayUnion(ref.id) },
-      { merge: true },
-    );
+    tx.update(orgRef, {
+      approvedCount: Math.max(0, count),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      changed: changed.length,
+      unchanged: emails.length - changed.length,
+      approvedCount: Math.max(0, count),
+    };
   });
-  return readAccess(request);
+});
+// Keep a disabled endpoint so every previously issued code fails, including old clients.
+export const redeemOrganisationCode = onCall(options, async (request) => {
+  user(request);
+  throw new HttpsError(
+    "failed-precondition",
+    "Organisation access now uses approved email addresses. Sign in with the address approved by your organisation.",
+  );
 });

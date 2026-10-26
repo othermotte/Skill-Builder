@@ -6,7 +6,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import { freemiumEnabled, readAccess, checkPracticeAccess, trustedPracticeInstruction, saveFreeRecommendations } from './access';
 import { freeSkills } from './accessDomain';
-export { getAccessAccount, chooseFreeScenario, listOrganisations, saveOrganisation, redeemOrganisationCode } from './access';
+export { getAccessAccount, chooseFreeScenario, listOrganisations, saveOrganisation, redeemOrganisationCode, listApprovedMembers, updateApprovedMembers } from './access';
 
 initializeApp();
 

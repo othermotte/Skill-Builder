@@ -1,46 +1,51 @@
-
-import React from 'react';
-import { Scenario } from '../types';
-
+import React from "react";
+import { Scenario } from "../types";
 interface ScenarioCardProps {
   scenario: Scenario;
   depth?: number;
   onSelect: () => void;
+  locked?: boolean;
+  freeChoice?: boolean;
+  choosingFree?: boolean;
 }
-
-export const ScenarioCard: React.FC<ScenarioCardProps> = ({ scenario, depth = 0, onSelect }) => {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="group relative w-full text-left bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-900 rounded-3xl p-8 transition-all duration-500 flex flex-col h-full overflow-hidden shadow-sm hover:shadow-2xl ease-out cursor-pointer"
-    >
-      <div className="flex justify-between items-start mb-6">
-        <div className="bg-gray-100 text-gray-400 p-2 rounded-full group-hover:bg-black group-hover:text-white transition-colors duration-500">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5m4.75-11.396c.75.068 1.501.068 2.25 0m0 0v5.714c0 .597.237 1.17.659 1.591L16.75 14.5M5 14.5l-.887 1.775A2.25 2.25 0 0 0 6.125 19.5h7.75a2.25 2.25 0 0 0 2.012-3.225L16.75 14.5M5 14.5h11.75" />
-            </svg>
-        </div>
-      </div>
-      
-      <div className="flex flex-col h-full">
-        <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tighter leading-none uppercase">
-          {scenario.title}
-        </h3>
-        
-        <p className="text-gray-500 text-sm leading-relaxed font-medium mb-8 whitespace-pre-wrap line-clamp-6 group-hover:line-clamp-none transition-all duration-700">
-            {scenario.description}
-        </p>
-        
-        <div className="mt-auto pt-6 flex items-center justify-end border-t border-gray-50">
-          <div className="flex items-center gap-2 text-black font-bold text-sm">
-               <span>Enter Lab</span>
-               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 transform group-hover:translate-x-1 transition-transform">
-                  <path fillRule="evenodd" d="M16.72 7.72a.75.75 0 0 1 1.06 0l3.75 3.75a.75.75 0 0 1 0 1.06l-3.75 3.75a.75.75 0 1 1-1.06-1.06l2.47-2.47H3a.75.75 0 0 1 0-1.5h16.19l-2.47-2.47a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
-              </svg>
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-};
+export const ScenarioCard: React.FC<ScenarioCardProps> = ({
+  scenario,
+  onSelect,
+  locked = false,
+  freeChoice = false,
+  choosingFree = false,
+}) => (
+  <button
+    type="button"
+    disabled={locked}
+    onClick={onSelect}
+    className={`group relative w-full text-left border rounded-3xl p-8 flex flex-col h-full shadow-sm transition-colors ${locked ? "bg-gray-50 border-gray-200 cursor-not-allowed" : freeChoice ? "border-indigo-400 bg-indigo-50 hover:border-indigo-600" : "bg-white border-gray-200 hover:border-indigo-400"}`}
+  >
+    {(freeChoice || locked || choosingFree) && (
+      <span
+        className={`text-xs font-semibold rounded-full px-3 py-1 mb-5 self-start ${freeChoice ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"}`}
+      >
+        {freeChoice
+          ? "Your free scenario"
+          : locked
+            ? "Full access required"
+            : "Available as your free scenario"}
+      </span>
+    )}
+    <h3 className="text-2xl font-bold text-gray-900 mb-4 tracking-tight">
+      {scenario.title}
+    </h3>
+    <p className="text-gray-600 text-sm leading-relaxed mb-8 whitespace-pre-wrap line-clamp-6">
+      {scenario.description}
+    </p>
+    <span className="mt-auto pt-5 border-t border-gray-200 w-full font-semibold text-sm">
+      {locked
+        ? "Your free account includes your chosen scenario"
+        : freeChoice
+          ? "Open your scenario"
+          : choosingFree
+            ? "Choose this scenario"
+            : "Enter Lab"}
+    </span>
+  </button>
+);

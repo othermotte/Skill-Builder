@@ -2,8 +2,6 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
   activeGrant,
-  emailAllowed,
-  normaliseDomains,
   selectScenario,
   freeSkills,
 } = require("../functions/lib/accessDomain.js");
@@ -16,15 +14,6 @@ test("organisation grants expire at the boundary and revocation overrides never-
     activeGrant({ ...g, expiresAt: null, revokedAt: 1 }, 1000),
     false,
   );
-});
-test("email restrictions compare exact normalised domains, not lookalikes or suffixes", () => {
-  const domains = normaliseDomains(["UNC.EDU", "unc.edu"]);
-  assert.deepEqual(domains, ["unc.edu"]);
-  assert.equal(emailAllowed("person@unc.edu", domains), true);
-  assert.equal(emailAllowed("person@evilunc.edu", domains), false);
-  assert.equal(emailAllowed("person@unc.edu.example.org", domains), false);
-  assert.equal(emailAllowed("person@sub.unc.edu", domains), false);
-  assert.throws(() => normaliseDomains(["@unc.edu"]));
 });
 test("free scenario selection is permanent but idempotent", () => {
   assert.equal(selectScenario(null, "a"), "a");
