@@ -6,7 +6,7 @@ Branch: `codex/freemium-staging`. Project: `leadership-skill-builder-stg`. Produ
 
 ## Test the experience
 
-Create a separate staging account using email and password, then verify the email. Existing production accounts do not sign in to this project. Google sign-in is not enabled on staging. Sign in as the verified `gary@gardenersnotmechanics.com` account to see Admin Panel → organisations.
+Sign in with Google, or create a separate staging account using email and password and verify the email. Google sign-in creates a separate staging profile; production accounts and their history are not copied. Sign in as the verified `gary@gardenersnotmechanics.com` account to see Admin Panel → organisations.
 
 Homepage previews: `?homepage=a` and `?homepage=b`. These are messaging variants for review, with the same free offer. Assignment lasts for a browser session; no visitor tracking or automatic winner selection is enabled.
 
