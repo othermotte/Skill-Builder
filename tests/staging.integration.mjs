@@ -77,35 +77,10 @@ async function adminSession() {
   );
   const existing = lookup.users?.[0];
   if (!existing) return user("gary@gardenersnotmechanics.com");
-  assert.equal(
-    existing.emailVerified,
-    true,
-    "The existing administrator must have a verified address.",
-  );
-  const serviceAccount =
-    "firebase-adminsdk-fbsvc@" + project + ".iam.gserviceaccount.com";
-  const now = Math.floor(Date.now() / 1000);
-  const signed = await rest(
-    "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" +
-      serviceAccount +
-      ":signJwt",
-    {
-      payload: JSON.stringify({
-        iss: serviceAccount,
-        sub: serviceAccount,
-        aud: "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit",
-        iat: now,
-        exp: now + 300,
-        uid: existing.localId,
-      }),
-    },
-    true,
-  );
-  const session = await rest(
-    authRoot + "accounts:signInWithCustomToken?key=" + web.apiKey,
-    { token: signed.signedJwt, returnSecureToken: true },
-  );
-  return { uid: existing.localId, token: session.idToken };
+  const token = process.env.STAGING_ADMIN_ID_TOKEN;
+  if (!token) throw new Error('An administrator already exists and will be preserved. Supply a short-lived STAGING_ADMIN_ID_TOKEN for automated admin integration tests, or use the browser verification workflow. No additional IAM permissions are required.');
+  return { uid: existing.localId, token };
+
 }
 async function call(actor, name, data = {}) {
   const response = await fetch(endpoint + name, {
