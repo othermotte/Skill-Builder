@@ -132,6 +132,7 @@ export const createCheckoutSession = onCall(billingOptions, async request => {
     const startsAt = plan !== 'month_pass' && Number(account.passUntil || 0) > Date.now()
       ? Math.ceil(account.passUntil! / 1000) : 0;
     const session = await stripe.checkout.sessions.create({
+      branding_settings: { display_name: 'Leadership Skill Builder' },
       customer: customerId, client_reference_id: uid, mode: plan === 'month_pass' ? 'payment' : 'subscription',
       line_items: [{ price: priceId, quantity: 1 }], allowed_payment_method_types: ['card'],
       metadata: { app: 'leadership-skill-builder', firebaseUid: uid, plan },

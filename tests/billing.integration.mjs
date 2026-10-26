@@ -70,6 +70,7 @@ try {
   await billing.accountState(checkoutUid);
   const checkout = await billing.createCheckoutSession.run({ ...auth(checkoutUid), data: { plan: 'month_pass' } });
   assert.match(checkout.url, /^https:\/\/checkout.stripe.com/);
+  assert.equal(checkoutForm.get('branding_settings[display_name]'),'Leadership Skill Builder');
   assert.equal(await webhook(event(prefix + 'invalid', 'checkout.session.completed', { id: 'cs_' + checkoutUid }), false), 400);
   const purchase = event(prefix + 'purchase', 'checkout.session.completed', { id: 'cs_' + checkoutUid });
   assert.equal(await webhook(purchase), 200);
