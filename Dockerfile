@@ -5,11 +5,13 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Build the application
 COPY . .
-RUN npm run build
+ARG BUILD_MODE=production
+RUN test "$BUILD_MODE" = staging || test ! -f STAGING_ONLY
+RUN npm run build -- --mode $BUILD_MODE
 
 # Runtime stage
 FROM node:22-alpine

@@ -9,6 +9,8 @@ import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
  * 
  * Configured for project: leadership-skill-builder-7aba5
  */
+export const stagingEnabled = import.meta.env.VITE_APP_ENV === 'staging';
+export const freemiumEnabled = stagingEnabled && import.meta.env.VITE_FREEMIUM_ENABLED === 'true';
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -19,6 +21,8 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+if (stagingEnabled && firebaseConfig.projectId !== 'leadership-skill-builder-stg') throw new Error('Staging must use its separate Firebase project.');
+if (import.meta.env.VITE_FREEMIUM_ENABLED === 'true' && !stagingEnabled) throw new Error('Freemium is restricted to staging until production launch is authorised.');
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 

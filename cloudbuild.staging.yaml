@@ -1,0 +1,23 @@
+# Build only. Deployment uses the operator's existing permissions, never broad new build roles.
+steps:
+  - name: node:22
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        test '$PROJECT_ID' = 'leadership-skill-builder-stg'
+        test -f STAGING_ONLY
+        test "$$(sed -n 's/^VITE_FIREBASE_PROJECT_ID=//p' .env.staging)" = 'leadership-skill-builder-stg'
+        npm ci
+        npm --prefix functions ci
+        npm run typecheck
+        npm test
+  - name: gcr.io/cloud-builders/docker
+    args: [build, --build-arg, BUILD_MODE=staging, -t, 'europe-west1-docker.pkg.dev/$PROJECT_ID/skill-builder/staging:$BUILD_ID', .]
+  - name: gcr.io/cloud-builders/docker
+    args: [push, 'europe-west1-docker.pkg.dev/$PROJECT_ID/skill-builder/staging:$BUILD_ID']
+images:
+  - europe-west1-docker.pkg.dev/$PROJECT_ID/skill-builder/staging:$BUILD_ID
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

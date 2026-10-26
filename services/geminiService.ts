@@ -28,6 +28,7 @@ interface TextSessionStart {
   response: string;
   model: string;
   usage?: UsageStatus;
+  systemInstruction?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,13 +38,14 @@ interface TextSessionStart {
 
 export const startTextConversation = async (
   mode: 'diagnostic' | 'tutorial',
-  systemInstruction: string
+  systemInstruction: string,
+  scenarioId?: string, microSkillId?: string
 ): Promise<TextSessionStart> => {
   const fn = httpsCallable<
-    { mode: 'diagnostic' | 'tutorial'; systemInstruction: string },
+    { mode: 'diagnostic' | 'tutorial'; systemInstruction: string; scenarioId?: string; microSkillId?: string },
     TextSessionStart
   >(functions, 'startGeminiTextSession');
-  const result = await fn({ mode, systemInstruction });
+  const result = await fn({ mode, systemInstruction, scenarioId, microSkillId: microSkillId || null });
   return result.data;
 };
 
@@ -98,12 +100,13 @@ export const getFeedbackForTranscript = async (
  */
 export const getMicroSkillSuggestions = async (
   transcript: TranscriptEntry[],
-  feedback: FeedbackAnalysis
+  feedback: FeedbackAnalysis,
+  scenarioId?: string
 ): Promise<any[]> => {
   const skillLibrary = await getSkillLibrary();
 
   const fn = httpsCallable<any, any[]>(functions, 'getMicroSkillSuggestions');
-  const result = await fn({ transcript, feedback, skillLibrary });
+  const result = await fn({ transcript, feedback, skillLibrary, scenarioId });
   return result.data;
 };
 
@@ -113,10 +116,11 @@ export const getMicroSkillSuggestions = async (
 export const generateSkillSnapshot = async (
   microSkillLabel: string,
   evidence: string,
-  history: string
+  history: string,
+  scenarioId?: string, microSkillId?: string
 ): Promise<SkillSnapshot> => {
   const fn = httpsCallable<any, SkillSnapshot>(functions, 'generateSkillSnapshot');
-  const result = await fn({ microSkillLabel, evidence, history });
+  const result = await fn({ microSkillLabel, evidence, history, scenarioId, microSkillId });
   return result.data;
 };
 
@@ -128,6 +132,6 @@ export const analyzePracticeReflection = async (
   microSkillLabel: string
 ): Promise<any> => {
   const fn = httpsCallable<any, any>(functions, 'analyzePracticeReflection');
-  const result = await fn({ transcript: attempt.transcript, microSkillLabel });
+  const result = await fn({ transcript: attempt.transcript, microSkillLabel, scenarioId: attempt.scenarioId, microSkillId: attempt.microSkillId });
   return result.data;
 };

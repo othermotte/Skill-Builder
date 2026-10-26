@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PracticeSession, Scenario, Skill, FeedbackAnalysis, SkillLibrary, PracticeAttempt } from '../types';
+import { freemiumEnabled } from '../firebaseConfig';
 import { getMicroSkillSuggestions } from '../services/geminiService';
 import { getSkillLibrary, updateSessionRating, savePracticeSession } from '../services/firebase';
 
@@ -11,7 +12,8 @@ interface FeedbackPageProps {
     practiceAttempts?: PracticeAttempt[];
     onBackToDashboard: () => void;
     onViewHistory: () => void;
-    onBeginPracticeLoop: (groupId: string, microSkillId: string, reason: string) => void;
+    onBeginPracticeLoop: (groupId: string, microSkillId: string, reason: string) => Promise<void>;
+    allowMoreRecommendations?: boolean;
     initialView?: 'feedback' | 'choose_focus';
     onSessionUpdate?: (session: PracticeSession) => void;
     onRetryAssessment?: () => void;
@@ -73,7 +75,7 @@ const StarRating: React.FC<{ initialRating?: number; onRate: (rating: number) =>
 export const FeedbackPage: React.FC<FeedbackPageProps> = ({
     practiceSession, scenario, skills, practiceAttempts,
     onBackToDashboard, onViewHistory, onBeginPracticeLoop,
-    initialView = 'feedback', onSessionUpdate, onRetryAssessment
+    allowMoreRecommendations = true, initialView = 'feedback', onSessionUpdate, onRetryAssessment
 }) => {
     const [showTranscript, setShowTranscript] = useState(false);
     const [viewState, setViewState] = useState<'feedback' | 'choose_focus'>(initialView);
@@ -105,7 +107,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
 
             const loadData = async () => {
                 // 1. Try Cache First
-                if (practiceSession.suggestedFocusOptions) {
+                if (!freemiumEnabled && practiceSession.suggestedFocusOptions) {
                     try {
                         const parsed = JSON.parse(practiceSession.suggestedFocusOptions);
                         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -123,7 +125,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
                 try {
                     const [lib, sug] = await Promise.all([
                         getSkillLibrary(),
-                        getMicroSkillSuggestions(practiceSession.transcript, feedback)
+                        getMicroSkillSuggestions(practiceSession.transcript, feedback, practiceSession.scenarioId)
                     ]);
                     setLibrary(lib);
                     setSuggestions(sug);
@@ -149,7 +151,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
         setIsLoadingSuggestions(true);
         setErrorMsg(null);
         try {
-            const sug = await getMicroSkillSuggestions(practiceSession.transcript, feedback!);
+            const sug = await getMicroSkillSuggestions(practiceSession.transcript, feedback!, practiceSession.scenarioId);
             setSuggestions(sug);
 
             const updatedSession = { ...practiceSession, suggestedFocusOptions: JSON.stringify(sug) };
@@ -167,9 +169,10 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
         updateSessionRating(practiceSession.id, r);
     };
 
-    const handleSelectFocus = (opt: any) => {
+    const handleSelectFocus = async (opt: any) => {
         setSelectedId(opt.microSkillId);
-        onBeginPracticeLoop(opt.groupId, opt.microSkillId, opt.reason);
+        try { await onBeginPracticeLoop(opt.groupId, opt.microSkillId, opt.reason); }
+        catch (e: any) { setErrorMsg(e.message || 'Unable to start this practice. Please try again.'); setSelectedId(null); }
     };
 
     const isErrorState = practiceSession.feedback?.includes('"error":true');
@@ -230,7 +233,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
 
     const isValid = feedback.validity?.is_valid ?? false;
 
-    const scoreItems = useMemo(() => {
+    const scoreItems = (() => {
         if (!feedback?.scores || typeof feedback.scores !== 'object') return [];
         try {
             return Object.entries(feedback.scores).map(([id, val]) => {
@@ -245,7 +248,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
             console.error("Error processing scores:", e);
             return [];
         }
-    }, [feedback?.scores, skills]);
+    })();
 
     if (viewState === 'choose_focus') {
         return (
@@ -268,7 +271,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
                     <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-gray-900 leading-none">
                         Choose Your <span className="text-indigo-500">Focus</span>.
                     </h2>
-                    <p className="text-gray-500 text-lg font-medium">Choose a micro-skill to practise next. Complete all suggested targets to unlock new recommendations.</p>
+                    <p className="text-gray-500 text-lg font-medium">{allowMoreRecommendations ? 'Choose a micro skill to practise next. Complete all suggested targets to unlock new recommendations.' : 'These five micro skills were recommended from your assessment. Return to them to deepen your practice.'}</p>
                 </div>
 
                 {isLoadingSuggestions ? (
@@ -410,12 +413,12 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
                                         >
                                             View Practice History
                                         </button>
-                                        <button
+                                        {allowMoreRecommendations && (<button
                                             onClick={handleGenerateNewSuggestions}
                                             className="bg-indigo-600 text-white hover:bg-indigo-700 px-8 py-3 rounded-xl font-black uppercase tracking-[0.15em] text-xs transition-colors shadow-lg"
                                         >
                                             Generate New Suggestions
-                                        </button>
+                                        </button>)}
                                     </div>
                                 </div>
                             )}

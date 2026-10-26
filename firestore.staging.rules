@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function verified() { return signedIn() && request.auth.token.email_verified == true; }
+    function admin() { return verified() && request.auth.token.email == 'gary@gardenersnotmechanics.com'; }
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || admin());
+      allow list: if admin();
+      allow create: if signedIn() && request.auth.uid == uid && request.resource.data.id == uid && request.resource.data.email == request.auth.token.email && (request.resource.data.role == 'LEARNER' || admin());
+      allow update: if admin() || (signedIn() && request.auth.uid == uid && request.resource.data.id == resource.data.id && request.resource.data.email == resource.data.email && request.resource.data.role == resource.data.role);
+    }
+    match /scenarios/{id} { allow read: if signedIn(); allow write: if admin(); }
+    match /skills/{id} { allow read: if signedIn(); allow write: if admin(); }
+    match /system_logic/{id} { allow read: if signedIn(); allow write: if admin(); }
+    match /practiceSessions/{id} {
+      allow read, delete: if verified() && (resource.data.userId == request.auth.uid || admin());
+      allow create: if verified() && request.resource.data.userId == request.auth.uid;
+      allow update: if verified() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+    }
+    match /practiceAttempts/{id} {
+      allow read, delete: if verified() && (resource.data.userId == request.auth.uid || admin());
+      allow create: if verified() && request.resource.data.userId == request.auth.uid;
+      allow update: if verified() && resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+    }
+    match /events/{id} { allow create: if verified() && request.resource.data.userId == request.auth.uid; allow read: if admin(); }
+    match /app_feedback/{id} { allow create: if verified() && request.resource.data.userId == request.auth.uid; allow read: if admin(); }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

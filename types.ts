@@ -29,8 +29,9 @@ export interface MicroSkill {
 
 export interface Skill {
   id: string;
-  name: string;
-  micro_skills: MicroSkill[];
+  name?: string;
+  label?: string;
+  micro_skills?: MicroSkill[];
 }
 
 export interface SkillGroup {
@@ -48,6 +49,9 @@ export interface Scenario {
   title: string;
   description: string;
   challenges?: string[];
+  voice?: string;
+  instruction?: string;
+  rubric?: string;
   skillId: string;
 }
 

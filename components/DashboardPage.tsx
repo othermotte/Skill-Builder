@@ -5,6 +5,7 @@ import { ScenarioCard } from './ScenarioCard';
 import { PrivacyModal, ContactModal } from './LegalModals';
 import { LabGuide } from './LabGuide';
 import { getAllUsers, getAllPracticeSessions, saveAppFeedback, patchOldAttempts } from '../services/firebase';
+import { freemiumEnabled } from '../firebaseConfig';
 import { INITIAL_SKILLS } from '../constants';
 import { AdminAnalytics } from './AdminAnalytics';
 import { AppFeedbackForm } from './AppFeedbackForm';
@@ -13,6 +14,7 @@ interface DashboardPageProps {
   currentUser: User;
   scenarios: Scenario[];
   skills: Skill[];
+  practiceSessions: PracticeSession[];
   practiceAttempts: PracticeAttempt[];
   appLibrary: SkillLibrary | null;
   onStartPractice: (scenario: Scenario) => void;
@@ -86,10 +88,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </p>
           </div>
           <button
-            onClick={() => onStartPractice(scenarios[0])}
+            onClick={() => freemiumEnabled ? document.getElementById('scenario-catalogue')?.scrollIntoView({ behavior: 'smooth' }) : onStartPractice(scenarios[0])}
             className="relative z-10 bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-gray-50 transition-all active:scale-[0.98]"
           >
-            Start First Lab
+            {freemiumEnabled ? 'Choose your scenario' : 'Start First Lab'}
           </button>
         </div>
       );
@@ -217,7 +219,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </section>
 
       {/* 3. SCENARIO LABS */}
-      <section className="space-y-12 px-4">
+      <section id="scenario-catalogue" className="space-y-12 px-4">
         <div className="space-y-2">
           <h3 className="text-2xl font-black tracking-tight text-gray-900 uppercase">SCENARIO LABS</h3>
           <p className="text-gray-400 text-sm font-medium italic">Deep-dive scenarios to reveal your thinking patterns.</p>

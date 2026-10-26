@@ -1,3 +1,5 @@
+import { freemiumEnabled, stagingEnabled } from '../firebaseConfig';
+import { chooseHomepageVariant, homepageCopy } from '../utils/homepageExperiment';
 import React, { useState } from 'react';
 import { GoogleIcon } from './icons/GoogleIcon';
 import { loginWithEmail, signupWithEmail, loginWithGoogle, sendPasswordReset } from '../services/firebase';
@@ -30,6 +32,13 @@ const ChartIcon = () => (
 );
 
 export const LoginPage: React.FC = () => {
+    const [variant] = useState(() => {
+        let saved: string | null = null;
+        try { saved = sessionStorage.getItem('homepageVariant'); } catch {}
+        const choice = chooseHomepageVariant(location.search, saved, Math.random());
+        try { sessionStorage.setItem('homepageVariant', choice); const code = new URLSearchParams(location.search).get('organisationCode'); if (code) sessionStorage.setItem('organisationCode', code); } catch {}
+        return choice;
+    });
     const [authMode, setAuthMode] = useState<'login' | 'signup' | 'reset'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -96,8 +105,8 @@ export const LoginPage: React.FC = () => {
                             <div className="flex justify-end"><button type="button" onClick={() => setAuthMode('reset')} className="text-[10px] font-black text-gray-400 hover:text-black uppercase tracking-widest">Forgot password?</button></div>
                             <button type="submit" className="w-full bg-black text-white font-black py-4 px-4 rounded-2xl shadow-xl hover:bg-gray-800 transition-all active:scale-[0.98] uppercase tracking-widest text-xs">Log In</button>
                         </form>
-                        <div className="my-10 flex items-center"><div className="flex-grow border-t border-gray-100"></div><span className="mx-4 text-gray-300 text-[10px] font-black uppercase tracking-[0.3em]">OR</span><div className="flex-grow border-t border-gray-100"></div></div>
-                        <button onClick={handleGoogleButtonClick} className="w-full flex items-center justify-center gap-4 bg-white text-gray-900 font-black py-4 px-4 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all shadow-sm active:scale-[0.98] uppercase tracking-widest text-xs"><GoogleIcon className="w-4 h-4 shrink-0" />Log In With Google</button>
+                        {!stagingEnabled && (<div className="my-10 flex items-center"><div className="flex-grow border-t border-gray-100"></div><span className="mx-4 text-gray-300 text-[10px] font-black uppercase tracking-[0.3em]">OR</span><div className="flex-grow border-t border-gray-100"></div></div>)}
+                        {!stagingEnabled && (<button onClick={handleGoogleButtonClick} className="w-full flex items-center justify-center gap-4 bg-white text-gray-900 font-black py-4 px-4 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all shadow-sm active:scale-[0.98] uppercase tracking-widest text-xs"><GoogleIcon className="w-4 h-4 shrink-0" />Log In With Google</button>)}
                         <p className="text-center text-gray-400 mt-10 text-sm font-medium">New here? <button onClick={() => setAuthMode('signup')} className="font-black text-black hover:underline">Sign Up</button></p>
                     </div>
                 );
@@ -122,11 +131,11 @@ export const LoginPage: React.FC = () => {
                             <div className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mt-2">Skill Builder.</div>
                         </h2>
                         <p className="text-2xl font-bold text-gray-500 leading-tight max-w-md">
-                            Master the high-stakes conversations that define great leaders.
+                            {freemiumEnabled ? homepageCopy[variant].heading : 'Master the high-stakes conversations that define great leaders.'}
                         </p>
 
                         <p className="text-lg font-black text-gray-900 pt-4">
-                            Every conversation informs the next conversation.
+                            {freemiumEnabled ? homepageCopy[variant].detail : 'Every conversation informs the next conversation.'}
                         </p>
 
                         <div className="pt-2">
