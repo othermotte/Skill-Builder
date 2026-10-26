@@ -18,7 +18,7 @@ Only an exact, verified address match grants access. A university domain does no
 
 The administrator account retains full catalogue access. The dashboard labels the signed-in email and access type; use another, unapproved email address to test as a free user. Before selection, the catalogue explains that one scenario is a permanent free choice. Afterwards, the chosen scenario is shown first and the others are labelled as requiring full access. There is no administrator preview mode.
 
-Paid pricing, checkout and subscriptions are not configured in this staging foundation. No UNC grant has been created yet.
+Stripe test-mode checkout and customer billing are configured in the existing Gardenersnotmechanics account. Skill Builder has its own product, prices, portal configuration, customers and signed webhook. Agreed prices are US$14.99 for one calendar month without renewal, US$9.99 monthly and US$99 annually. There is no live payment connection in this branch. No UNC grant has been created yet.
 
 ## Isolation and deployment
 
@@ -43,3 +43,13 @@ After checking the target, deploy Functions and rules with `firebase deploy --co
 The deployed integration harness (`ALLOW_DISPOSABLE_STAGING_TESTS=true node tests/staging.integration.mjs`) requires owner/operator gcloud credentials. It creates disposable verified accounts and organisation grants, makes real model calls, checks privilege boundaries, then removes its user and grant fixtures. It preserves an existing staging administrator. If one exists, automated admin checks require an operator-provided short-lived STAGING_ADMIN_ID_TOKEN; alternatively test the roster controls in the browser and use disposable learners for access-boundary checks. It does not request additional IAM signing permissions. Disposable learner accounts and grants are removed after the checks. Browser smoke checks cover the homepage and admin controls; listen to a real voice assessment and coaching session before treating voice UX as fully tested.
 
 Production promotion requires a separate authorisation after UNC testing is finished. Preserve existing users and their history, and establish the complimentary organisation grant before any commercial cutover.
+
+## Stripe staging integration
+
+Non-secret Stripe configuration is in `config/stripe.staging.json`; prepare-staging preserves these settings. `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are stored only in staging Secret Manager and mounted only into payment functions. The runtime rejects live Stripe keys and a non-test mode. The separate test endpoint receives only the eight selected checkout, subscription, invoice and refund events, verifies the raw-body signature and test mode, then checks app metadata, customer ownership and configured price IDs. Browser return parameters never grant access. Duplicate checkout notifications cannot extend a pass or record payment twice.
+
+Paid access is combined with administrator and exact-email organisation access. Expiry retains the permanent free scenario, saved micro skills and learning history. Complimentary accounts are prevented from purchasing unnecessarily. Cancellation stops renewal while preserving already paid access. A pass holder can schedule a subscription with its first charge at pass expiry and no prorations. A failed invoice does not extend the paid period. Full refunds are recorded for administrator review; automatic refund-driven revocation is not implemented.
+
+`npm test` includes calendar-month, expiry and plan-validation checks. Start a Firestore emulator with project `demo-skill-builder-billing` on 127.0.0.1:8180 and run `node tests/billing.integration.mjs` for signed webhook, duplicate notification, complimentary-account, checkout, cancellation and free-choice retention tests. The Stripe API is a local fixture in that test. Hosted sandbox payment verification is separate. Use Stripe dummy cards only; never test using real card details.
+
+Live release still needs separate approval after UNC, including production Stripe product/price/portal configuration, signed receiver, payment terms and tax treatment. No live catalogue or payment setting was changed here.

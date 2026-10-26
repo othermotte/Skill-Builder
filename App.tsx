@@ -21,6 +21,7 @@ import {
 } from './services/firebase';
 import { auth, stagingEnabled, freemiumEnabled } from './firebaseConfig';
 import { AccessAccount, getAccessAccount, chooseFreeScenario } from './services/access';
+import { BillingPanel } from './components/BillingPanel';
 import { AccessPanel } from './components/AccessPanel';
 import { generateSkillSnapshot, analyzePracticeReflection, getFeedbackForTranscript } from './services/geminiService';
 
@@ -146,9 +147,8 @@ const App: React.FC = () => {
   }, [firebaseUser, isAuthLoading]);
 
   useEffect(() => {
-    if (!freemiumEnabled || !access?.organisations.length) return;
-    if (access.organisations.some(o => o.expiresAt === null)) return;
-    const expiresAt = Math.max(...access.organisations.map(o => o.expiresAt || 0));
+    if (!freemiumEnabled || !access?.fullAccess || !access.accessUntil) return;
+    const expiresAt = access.accessUntil;
     const timer = setTimeout(() => { getAccessAccount().then(setAccess).catch(() => setAccess(null)); }, Math.min(2147483647, Math.max(1, expiresAt - Date.now() + 1000)));
     return () => clearTimeout(timer);
   }, [access]);
@@ -466,6 +466,7 @@ const App: React.FC = () => {
       {stagingEnabled && <div className="bg-amber-100 text-amber-950 text-center p-3 text-sm">Skill Builder staging. Separate test accounts and data.</div>}
       {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <AccessPanel access={access} email={appUser.email} scenarioTitle={scenarios.find(s => s.id === access.freeScenarioId)?.title} />}
       {accessError && <div role="alert" className="p-5 text-center bg-amber-50">{accessError} <button onClick={() => setAccessError(null)} className="underline">Dismiss</button></div>}
+      {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <BillingPanel uid={firebaseUser.uid} access={access} onRefresh={async () => { const updated = await getAccessAccount(); if (auth.currentUser?.uid === firebaseUser.uid) setAccess(updated); }} />}
       {confirmScenario && <div role="dialog" aria-modal="true" aria-labelledby="scenario-choice-title" className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 max-w-lg space-y-5 max-h-[85dvh] overflow-y-auto"><h2 id="scenario-choice-title" className="text-2xl font-bold">Choose {confirmScenario.title}?</h2><p>This will be your permanent free scenario. You can repeat its assessment and practise up to five micro skills recommended from your evaluation. Other scenarios require full access. You can keep browsing before making your choice.</p><details className="border rounded-xl p-3"><summary className="cursor-pointer font-semibold">Read the scenario</summary><p className="text-sm whitespace-pre-wrap mt-3">{confirmScenario.description}</p></details>{accessError && <p role="alert" className="text-rose-700 text-sm">{accessError}</p>}<button disabled={choosingScenario} className="bg-indigo-600 text-white p-3 rounded-xl disabled:opacity-50" onClick={async () => { const scenario = confirmScenario; setChoosingScenario(true); try { const updated = await chooseFreeScenario(scenario.id); setAccess(updated); setConfirmScenario(null); setSelectedScenario(scenario); setCurrentPracticeSession(null); setActiveMicroSkill(null); setPracticeType('diagnostic'); setInteractionMedium(null); setActivePage('assessment-launch'); } catch(e: any) { setAccessError(e.message); } finally { setChoosingScenario(false); } }}>{choosingScenario ? 'Saving…' : 'Confirm my free scenario'}</button> <button disabled={choosingScenario} onClick={() => setConfirmScenario(null)} className="p-3 underline">Keep browsing</button></div></div>}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       {appUser && (

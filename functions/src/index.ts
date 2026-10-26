@@ -8,6 +8,8 @@ import { freemiumEnabled, readAccess, checkPracticeAccess, trustedPracticeInstru
 import { freeSkills } from './accessDomain';
 export { getAccessAccount, chooseFreeScenario, listOrganisations, saveOrganisation, redeemOrganisationCode, listApprovedMembers, updateApprovedMembers } from './access';
 
+export { getBillingAccount, createCheckoutSession, createBillingPortalSession, stripeWebhook } from './billing';
+
 initializeApp();
 
 // The real API key is stored in Firebase Secret Manager.
@@ -184,8 +186,7 @@ export const getGeminiLiveToken = onCall(fnOptions, async (request) => {
   const ai = getLiveAI(apiKey);
   const now = Date.now();
   const access = freemiumEnabled() ? await readAccess(request) : null;
-  const grantExpiry = access?.source === 'organisation' && access.organisations.every(o => o.expiresAt !== null)
-    ? Math.max(...access.organisations.map(o => Number(o.expiresAt))) : Infinity;
+  const grantExpiry = access?.accessUntil ?? Infinity;
   const expiresAt = Math.min(now + 30 * 60 * 1000, grantExpiry);
   const newSessionExpireTime = new Date(Math.min(now + 60 * 1000, expiresAt)).toISOString();
   const expireTime = new Date(expiresAt).toISOString();

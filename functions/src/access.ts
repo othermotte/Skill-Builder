@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "crypto";
 import { normaliseEmail } from "./emailRoster";
+import { accessFor, BillingAccount } from './billingDomain';
 import { activeGrant, selectScenario } from "./accessDomain";
 const options = {
   region: "europe-west1" as const,
@@ -79,14 +80,20 @@ export async function readAccess(request: any) {
       name: d.data()!.name,
       expiresAt: d.data()!.expiresAt,
     }));
-  const fullAccess = isAdmin(request) || organisations.length > 0;
+  const paidAccount = process.env.BILLING_ENABLED === 'true' ? (await getFirestore().collection('commercialAccounts').doc(uid).get()).data() : null;
+  const paid = accessFor((paidAccount || { uid, createdAt: 0 }) as BillingAccount, Date.now());
+  const fullAccess = isAdmin(request) || organisations.length > 0 || paid.unlimited;
+  const organisationUntil = organisations.some(o => o.expiresAt === null) ? null : Math.max(0, ...organisations.map(o => Number(o.expiresAt)));
+  const accessUntil = isAdmin(request) || (organisations.length && organisationUntil === null) ? null : Math.max(organisationUntil || 0, paid.unlimited ? paid.accessUntil || 0 : 0) || null;
   return {
     fullAccess,
+    accessUntil,
+    paidPlan: paid.plan,
     source: isAdmin(request)
       ? "admin"
       : organisations.length
         ? "organisation"
-        : "free",
+        : paid.unlimited ? "paid" : "free",
     organisations,
     freeScenarioId: account.freeScenarioId || null,
     freeMicroSkills: account.freeMicroSkills || [],

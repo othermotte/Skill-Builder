@@ -3,6 +3,8 @@ import { functions } from "../firebaseConfig";
 export interface AccessAccount {
   fullAccess: boolean;
   source: string;
+  accessUntil: number | null;
+  paidPlan: string;
   freeScenarioId: string | null;
   freeMicroSkillLimit: number;
   freeMicroSkills: any[];

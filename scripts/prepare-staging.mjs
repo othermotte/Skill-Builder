@@ -21,5 +21,7 @@ writeFileSync(
     .map(([k, v]) => `${k}=${v}`)
     .join("\n") + "\n",
 );
-writeFileSync(`functions/.env.${project}`, "FREEMIUM_ENABLED=true\n");
+const billing = JSON.parse(readFileSync("config/stripe.staging.json", "utf8"));
+if (billing.STRIPE_MODE !== "test" || billing.APP_BASE_URL !== "https://leadership-skill-builder-staging-600309447137.europe-west1.run.app") throw new Error("Invalid Stripe staging configuration.");
+writeFileSync(`functions/.env.${project}`, Object.entries(billing).map(([k,v]) => `${k}=${v}`).join("\n") + "\n");
 console.log("Prepared configuration for staging only.");

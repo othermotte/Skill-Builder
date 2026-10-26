@@ -11,6 +11,8 @@ export const AccessPanel: React.FC<{
       <h2 className="font-bold">
         {access.source === "admin"
           ? "Administrator account · full access"
+          : access.source === "paid"
+            ? "Paid account · full access"
           : access.fullAccess
             ? "Organisation account · full access"
             : "Free account"}
@@ -18,6 +20,8 @@ export const AccessPanel: React.FC<{
       <p className="text-sm text-gray-700">
         {access.source === "admin"
           ? "You can use every scenario and micro skill. To test the free experience, sign in with another email address that is not approved for organisation access."
+          : access.source === "paid"
+            ? `You can use every scenario and micro skill.${access.accessUntil ? " Access until " + new Date(access.accessUntil).toLocaleDateString("en-GB") + "." : ""}`
           : access.fullAccess
             ? access.organisations
                 .map(
