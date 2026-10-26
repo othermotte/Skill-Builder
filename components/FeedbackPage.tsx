@@ -271,7 +271,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
                     <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-gray-900 leading-none">
                         Choose Your <span className="text-indigo-500">Focus</span>.
                     </h2>
-                    <p className="text-gray-500 text-lg font-medium">{allowMoreRecommendations ? 'Choose a micro skill to practise next. Complete all suggested targets to unlock new recommendations.' : 'These five micro skills were recommended from your assessment. Return to them to deepen your practice.'}</p>
+                    <p className="text-gray-500 text-lg font-medium">{allowMoreRecommendations ? 'Choose a micro skill to practise next. Complete all suggested targets to unlock new recommendations.' : 'Choose a recommended micro skill to practise next. Your free account includes practice in up to five micro skills.'}</p>
                 </div>
 
                 {isLoadingSuggestions ? (

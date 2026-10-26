@@ -227,7 +227,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       <section id="scenario-catalogue" className="space-y-12 px-4">
         <div className="space-y-2">
           <h3 className="text-2xl font-black tracking-tight text-gray-900 uppercase">SCENARIO LABS</h3>
-          <p className="text-gray-600 text-sm leading-relaxed">{isFree ? access?.freeScenarioId ? "Your chosen scenario is shown first. You can repeat its assessment and practise your five personalised micro skills. Other scenarios require full access." : "Your free account includes one scenario of your choice and five micro skills recommended from its assessment. Browse the scenarios, then confirm the one you want to keep. This choice is permanent." : "Explore the scenarios to reveal your thinking patterns."}</p>
+          <p className="text-gray-600 text-sm leading-relaxed">{isFree ? access?.freeScenarioId ? "Your chosen scenario is shown first. You can repeat its assessment and practise up to five personalised micro skills recommended from its assessment. Other scenarios require full access." : "Your free account includes one scenario of your choice and practice in up to five micro skills recommended from its assessment. Browse the scenarios, then confirm the one you want to keep. This choice is permanent." : "Explore the scenarios to reveal your thinking patterns."}</p>
         </div>
         <div className="grid grid-cols-1 gap-8">
           {orderedScenarios.map((scenario) => (
