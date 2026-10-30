@@ -19,7 +19,8 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install a simple static server
-RUN npm install -g serve@14.2.6
+COPY runtime/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy build output from build stage
 COPY --from=build /app/dist ./dist
@@ -31,4 +32,4 @@ ENV PORT=8080
 EXPOSE $PORT
 
 # Start the server
-CMD ["sh", "-c", "serve -s dist -l $PORT --config /app/serve.json"]
+CMD ["sh", "-c", "./node_modules/.bin/serve -s dist -l $PORT --config /app/serve.json"]

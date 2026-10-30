@@ -12,6 +12,9 @@ steps:
         npm --prefix functions ci
         npm run typecheck
         npm test
+        npm audit --omit=dev --audit-level=high
+        npm --prefix functions audit --omit=dev --audit-level=high
+        npm --prefix runtime audit --omit=dev --audit-level=high
   - name: gcr.io/cloud-builders/docker
     args: [build, --build-arg, BUILD_MODE=staging, -t, 'europe-west1-docker.pkg.dev/$PROJECT_ID/skill-builder/staging:$BUILD_ID', .]
   - name: gcr.io/cloud-builders/docker

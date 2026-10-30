@@ -1,0 +1,7 @@
+{
+  "name": "skill-builder-static-runtime",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": { "serve": "14.2.6" },
+  "overrides": { "compression": "^1.8.2" }
+}
