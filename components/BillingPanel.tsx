@@ -19,6 +19,13 @@ export const BillingPanel: React.FC<{uid: string; access: AccessAccount; onRefre
   useEffect(() => {
     let active = true;
     const status = new URLSearchParams(location.search).get('billing');
+    let selected: string | null = null;
+    try { selected = sessionStorage.getItem('skillBuilderPlan'); } catch {}
+    if (selected && ['month_pass','monthly','annual'].includes(selected) && !['admin','organisation'].includes(access.source)) {
+      setOpen(true);setNotice('Your selected plan is ready to review. Continue to test checkout when you are ready.');
+    }
+    try { sessionStorage.removeItem('skillBuilderPlan'); } catch {}
+
     if (status === 'success') {setOpen(true);setNotice('Your checkout is complete. We are checking payment confirmation. Access changes only after payment is confirmed.');}
     if (status === 'cancelled') {setOpen(true);setNotice('Checkout cancelled. Your access has not changed.');}
     const load = async () => {

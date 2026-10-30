@@ -12,11 +12,11 @@ export const homepageCopy = {
   a: {
     heading: "Discover where to focus your leadership development.",
     detail:
-      "Explore a realistic scenario, understand your judgement and get five micro skills to practise from your assessment.",
+      "Explore a realistic scenario, receive assessment feedback on your judgement and practise relevant micro skills. Your free account includes one scenario and up to five micro skills.",
   },
   b: {
     heading: "Turn a leadership challenge into practical progress.",
     detail:
-      "Assess how you would approach a realistic scenario, then practise five relevant micro skills with personalised coaching.",
+      "Assess how you would approach a realistic scenario, then practise the micro skills it reveals with personalised coaching. Start free with one scenario and up to five micro skills.",
   },
 };

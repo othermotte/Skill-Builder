@@ -6,6 +6,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import { freemiumEnabled, readAccess, checkPracticeAccess, trustedPracticeInstruction, saveFreeRecommendations } from './access';
 import { freeSkills } from './accessDomain';
+import { validateModelPayload, validatedTranscript, assertTextTurnAvailable } from './securityPolicy';
 export { getAccessAccount, chooseFreeScenario, listOrganisations, saveOrganisation, redeemOrganisationCode, listApprovedMembers, updateApprovedMembers } from './access';
 
 export { getBillingAccount, createCheckoutSession, createBillingPortalSession, stripeWebhook } from './billing';
@@ -51,9 +52,10 @@ function assertAuth(request: any) {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
-  if (request.auth.token.email_verified === false) {
+  if (request.auth.token.email_verified !== true) {
     throw new HttpsError('permission-denied', 'You must verify your email before using AI practice.');
   }
+  validateModelPayload(request.data);
 }
 
 function dayKey(date = new Date()) {
@@ -351,6 +353,12 @@ export const continueGeminiTextSession = onCall(fnOptions, async (request) => {
     })),
   ];
 
+  await db.runTransaction(async tx => {
+    const latest = (await tx.get(sessionRef)).data()!;
+    assertTextTurnAvailable(latest, Date.now());
+    tx.update(sessionRef, {turnCount: FieldValue.increment(1), processingUntil: Date.now() + 120000});
+  });
+  try {
   const ai = getAI(geminiApiKey.value());
   const response = await ai.models.generateContent({
     model: ANALYSIS_MODEL,
@@ -365,10 +373,12 @@ export const continueGeminiTextSession = onCall(fnOptions, async (request) => {
 
   await sessionRef.update({
     lastUsedAt: FieldValue.serverTimestamp(),
-    turnCount: FieldValue.increment(1),
   });
 
   return { response: responseText, model: ANALYSIS_MODEL };
+  } finally {
+    await sessionRef.update({processingUntil: 0});
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -388,7 +398,8 @@ export const getFeedbackForTranscript = onCall(
   async (request) => {
     assertAuth(request);
     const context = await checkPracticeAccess(request);
-    const { transcript } = request.data;
+    const transcript = validatedTranscript(request.data?.transcript);
+    await recordGeminiUsage(request, 'assessment', DAILY_HELPER_AI_LIMIT);
     const scenario = context?.scenario || request.data.scenario;
     const protocol = context ? (await getFirestore().collection('system_logic').doc('globalAssessor').get()).data()?.content || '' : request.data.protocol;
 
@@ -478,7 +489,8 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
   const access = freemiumEnabled() ? await readAccess(request) : null;
   if (access && !access.fullAccess && access.freeMicroSkills.length) return access.freeMicroSkills;
   await recordGeminiUsage(request, 'micro_skill_suggestions', DAILY_HELPER_AI_LIMIT);
-  const { transcript, feedback } = request.data;
+  const transcript = validatedTranscript(request.data?.transcript);
+  const feedback = request.data?.feedback;
   const skillLibrary = context?.library || request.data.skillLibrary;
 
   const ai = getAI(geminiApiKey.value());
@@ -622,7 +634,7 @@ export const generateSkillSnapshot = onCall(fnOptions, async (request) => {
 export const analyzePracticeReflection = onCall(fnOptions, async (request) => {
   await recordGeminiUsage(request, 'practice_reflection', DAILY_HELPER_AI_LIMIT);
   const context = await checkPracticeAccess(request, { ...request.data, requiresMicroSkill: true });
-  const { transcript } = request.data;
+  const transcript = validatedTranscript(request.data?.transcript);
   const microSkillLabel = context?.micro?.label || request.data.microSkillLabel;
 
   const ai = getAI(geminiApiKey.value());

@@ -28,10 +28,10 @@ export const PrivacyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
             <div>
                 <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-2">Data Privacy</h4>
                 <p className="mb-3">
-                    At Leadership Skill Builder, we prioritize your privacy. We explicitly state that neither your User ID nor any data generated within this application (including voice transcripts, scenarios, and feedback) is shared with any other person or organization.
+                    Your account and learning records are stored using Google Firebase. Scenario responses, transcripts and related feedback are processed by Google’s Gemini service to provide assessments and coaching. Authorised administrators can access stored learning records to administer the service and support users.
                 </p>
                 <p>
-                    Anything said or entered by you is used for the sole purpose of creating a rich, personalized conversational assessment environment.
+                    Your learning records are not published or made available to other learners. Payments are handled by Stripe, which receives your email address and transaction details. Card details entered in Stripe Checkout are not stored by Skill Builder.
                 </p>
             </div>
 
@@ -45,7 +45,7 @@ export const PrivacyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                             For Users
                         </span>
                         <p className="text-sm text-gray-700 mt-1.5">
-                            Your data is stored on highly secure, enterprise-grade infrastructure. We rely on the same world-class security standards and encryption used by Google to protect their own services.
+                            Access to your account requires sign-in. Database rules separate learner records and restrict administrative operations. Data is encrypted in transit and at rest using Google Cloud services.
                         </p>
                     </div>
                     
@@ -55,7 +55,7 @@ export const PrivacyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                              Technical Specs (For IT Teams)
                         </span>
                         <p className="text-xs text-gray-600 mt-1.5 font-mono leading-relaxed">
-                            Application hosted on Google Cloud Platform (GCP). Identity management via Firebase Authentication. Data storage uses Cloud Firestore (NoSQL) with automatic encryption at rest. AI inference provided by Google Gemini API over secure TLS 1.3 encryption.
+                            Application hosted on Google Cloud Platform (GCP). Identity management via Firebase Authentication. Data storage uses Cloud Firestore (NoSQL) with automatic encryption at rest. AI processing uses the Google Gemini API over HTTPS. Stripe hosts payment collection and subscription management.
                         </p>
                     </div>
                  </div>

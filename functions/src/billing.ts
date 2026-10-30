@@ -12,20 +12,25 @@ const webhookKey = defineSecret('STRIPE_WEBHOOK_SECRET');
 const region = 'europe-west1' as const;
 const billingOptions = { ...runtimeOptions, region, secrets: [stripeKey] };
 export const commercialEnabled = () => process.env.BILLING_ENABLED === 'true';
-export function requireUser(request: any): string {
+function billingGuard() {
   stagingGuard();
+  if (process.env.GCLOUD_PROJECT !== 'leadership-skill-builder-stg' && process.env.FUNCTIONS_EMULATOR !== 'true') throw new HttpsError('failed-precondition', 'Billing is currently restricted to staging.');
+}
+export function requireUser(request: any): string {
+  billingGuard();
   if (!request.auth) throw new HttpsError('unauthenticated', 'Please sign in.');
   if (request.auth.token.email_verified !== true) throw new HttpsError('permission-denied', 'Please verify your email first.');
   return request.auth.uid;
 }
 export function commercialDb() {
+  billingGuard();
   if (process.env.FUNCTIONS_EMULATOR === 'true' && !process.env.FIRESTORE_EMULATOR_HOST) {
     throw new HttpsError('failed-precondition', 'Start the Firestore emulator before testing billing or commercial usage.');
   }
   return getFirestore();
 }
 function stripeClient() {
-  stagingGuard();
+  billingGuard();
   if (process.env.STRIPE_MODE !== 'test') throw new HttpsError('failed-precondition', 'Skill Builder payments are currently restricted to test mode.');
   const key = stripeKey.value();
   if (process.env.STRIPE_MODE === 'test' && !/^(sk|rk)_test_/.test(key || '')) throw new HttpsError('failed-precondition', 'Staging accepts only Stripe sandbox credentials.');
