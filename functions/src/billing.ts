@@ -70,7 +70,7 @@ export async function accountState(uid: string) {
     paymentsReady: Object.values(priceMap()).every(Boolean) && !!process.env.STRIPE_PORTAL_CONFIGURATION,
     hadPaidAccess: !!(account.passUntil || account.paidThrough),
     hasCustomer: !!account.customerId,
-    hasSubscription: !!account.subscriptionId && !['canceled', 'unpaid', 'incomplete_expired'].includes(account.subscriptionStatus || ''),
+    hasSubscription: !!account.subscriptionId && !['canceled', 'incomplete_expired'].includes(account.subscriptionStatus || ''),
     subscriptionPlan: account.subscriptionPlan || null,
     subscriptionStartsAt: account.subscriptionStartsAt || null };
 }
@@ -82,7 +82,7 @@ export const getBillingAccount = onCall({ ...runtimeOptions, region }, async req
 
 function checkPurchase(account: BillingAccount, plan: string) {
   const access = accessFor(account, Date.now());
-  if (account.subscriptionId && !['canceled', 'unpaid', 'incomplete_expired'].includes(account.subscriptionStatus || '')) {
+  if (account.subscriptionId && !['canceled', 'incomplete_expired'].includes(account.subscriptionStatus || '')) {
     throw new HttpsError('already-exists', 'Please manage your existing subscription before purchasing another plan.');
   }
   if (access.unlimited && (access.plan !== 'month_pass' || plan === 'month_pass')) {

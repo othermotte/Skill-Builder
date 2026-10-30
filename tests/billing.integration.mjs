@@ -124,5 +124,10 @@ try {
   const expired = await access.readAccess(auth(checkoutUid));
   assert.equal(expired.fullAccess,false);assert.equal(expired.freeScenarioId,free.freeScenarioId);assert.deepEqual(expired.freeMicroSkills,free.freeMicroSkills);
   console.log('PASS subscription lifecycle: cancellation stops renewal, preserves paid access, and expiry returns to free');
+  subStatus = 'unpaid'; assert.equal(await webhook(subscription()), 200);
+  assert.equal((await billing.accountState(checkoutUid)).plan,'free');
+  assert.equal((await billing.accountState(checkoutUid)).hasSubscription,true);
+  await assert.rejects(billing.createCheckoutSession.run({...auth(checkoutUid),data:{plan:'annual'}}),/existing subscription/);
+  console.log('PASS unpaid subscriptions retain payment management and cannot be bypassed by purchasing a second subscription.');
 
 } finally { await new Promise(resolve => fixture.close(resolve)); await db.terminate(); }
