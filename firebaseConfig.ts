@@ -1,6 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { initializeFirestore, persistentLocalCache, CACHE_SIZE_UNLIMITED } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
@@ -24,6 +25,17 @@ const firebaseConfig = {
 if (stagingEnabled && firebaseConfig.projectId !== 'leadership-skill-builder-stg') throw new Error('Staging must use its separate Firebase project.');
 if (import.meta.env.VITE_FREEMIUM_ENABLED === 'true' && !stagingEnabled) throw new Error('Freemium is restricted to staging until production launch is authorised.');
 const app = initializeApp(firebaseConfig);
+// Initialise before Auth, Firestore or Functions so their SDKs attach attestation.
+// Local emulator tests do not contact the real attestation provider.
+const appCheckSiteKey = import.meta.env.VITE_APP_CHECK_SITE_KEY;
+const usingEmulator = import.meta.env.DEV && import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === 'true';
+if (stagingEnabled && !usingEmulator && !appCheckSiteKey) throw new Error('Staging App Check site key is required.');
+if (stagingEnabled && !usingEmulator) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 export const auth = getAuth(app);
 
 /**

@@ -31,6 +31,9 @@ export const PrivacyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                     Your account and learning records are stored using Google Firebase. Scenario responses, transcripts and related feedback are processed by Google’s Gemini service to provide assessments and coaching. Authorised administrators can access stored learning records to administer the service and support users.
                 </p>
                 <p>
+                    We use Google reCAPTCHA Enterprise through Firebase App Check to help prevent automated abuse. Google processes browser and device signals for this purpose. Google’s <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="underline">Terms of Service</a> apply.
+                </p>
+                <p className="mt-3">
                     Your learning records are not published or made available to other learners. Payments are handled by Stripe, which receives your email address and transaction details. Card details entered in Stripe Checkout are not stored by Skill Builder.
                 </p>
             </div>

@@ -1,3 +1,4 @@
+import { callableAppCheck } from './appCheck';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { GoogleGenAI, Modality, Type } from '@google/genai';
 import { defineSecret } from 'firebase-functions/params';
@@ -30,6 +31,7 @@ const MAX_TEXT_TRANSCRIPT_CHARS = 60000;
 
 // Shared function options
 const fnOptions = {
+  ...callableAppCheck,
   region: 'europe-west1' as const,
   secrets: [geminiApiKey],
   ...(process.env.FREEMIUM_ENABLED === 'true' ? { serviceAccount: 'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com', maxInstances: 3 } : {}),

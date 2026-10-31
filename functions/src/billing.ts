@@ -1,4 +1,5 @@
 import { stagingGuard, readAccess } from './access';
+import { callableAppCheck } from './appCheck';
 const runtimeOptions = { region: 'europe-west1' as const, maxInstances: 3, serviceAccount: 'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com' };
 import { randomUUID } from 'node:crypto';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
@@ -74,7 +75,7 @@ export async function accountState(uid: string) {
     subscriptionPlan: account.subscriptionPlan || null,
     subscriptionStartsAt: account.subscriptionStartsAt || null };
 }
-export const getBillingAccount = onCall({ ...runtimeOptions, region }, async request => {
+export const getBillingAccount = onCall({ ...runtimeOptions, ...callableAppCheck, region }, async request => {
   const uid = requireUser(request);
   if (!commercialEnabled()) return { enabled: false, paymentsReady: false };
   return accountState(uid);
@@ -90,7 +91,7 @@ function checkPurchase(account: BillingAccount, plan: string) {
   }
 }
 
-export const createCheckoutSession = onCall(billingOptions, async request => {
+export const createCheckoutSession = onCall({ ...billingOptions, ...callableAppCheck }, async request => {
   const uid = requireUser(request);
   if (!commercialEnabled()) throw new HttpsError('failed-precondition', 'Payments are not open yet.');
   const access = await readAccess(request);
@@ -152,7 +153,7 @@ export const createCheckoutSession = onCall(billingOptions, async request => {
     return { url: session.url };
   } finally { await ref.update({ checkoutLockUntil: 0 }); }
 });
-export const createBillingPortalSession = onCall(billingOptions, async request => {
+export const createBillingPortalSession = onCall({ ...billingOptions, ...callableAppCheck }, async request => {
   const uid = requireUser(request); const account = await ensureAccount(uid);
   if (!commercialEnabled()) throw new HttpsError('failed-precondition', 'Payments are not open yet.');
   if (!account.customerId) throw new HttpsError('failed-precondition', 'There is no billing account to manage yet.');

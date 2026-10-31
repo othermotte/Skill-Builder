@@ -15,6 +15,9 @@ for (const [key, value] of Object.entries({
   APP_ID: config.appId,
 }))
   env["VITE_FIREBASE_" + key] = value;
+const appCheck = JSON.parse(readFileSync("config/app-check.staging.json", "utf8"));
+if (!appCheck.siteKey) throw new Error("Missing staging App Check key.");
+env.VITE_APP_CHECK_SITE_KEY = appCheck.siteKey;
 writeFileSync(
   ".env.staging",
   Object.entries(env)
@@ -23,5 +26,5 @@ writeFileSync(
 );
 const billing = JSON.parse(readFileSync("config/stripe.staging.json", "utf8"));
 if (billing.STRIPE_MODE !== "test" || billing.APP_BASE_URL !== "https://leadership-skill-builder-staging-600309447137.europe-west1.run.app") throw new Error("Invalid Stripe staging configuration.");
-writeFileSync(`functions/.env.${project}`, Object.entries(billing).map(([k,v]) => `${k}=${v}`).join("\n") + "\n");
+writeFileSync(`functions/.env.${project}`, Object.entries({ ...billing, APP_CHECK_ENFORCED: "true" }).map(([k,v]) => `${k}=${v}`).join("\n") + "\n");
 console.log("Prepared configuration for staging only.");
