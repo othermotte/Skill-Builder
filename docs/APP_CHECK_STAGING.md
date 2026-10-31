@@ -18,7 +18,7 @@ The CSP allows the required Google reCAPTCHA script, connection and frame endpoi
 
 `tests/staging.integration.mjs` also obtains temporary test attestation. Its existing administrator requirement remains unchanged: it preserves the real administrator and requires an operator-supplied short-lived token for automated administrator tests.
 
-On 31 October Gary confirmed Google sign-in and voice worked before App Check was introduced. Fresh post-enforcement checks must be recorded separately.
+On 31 October Gary confirmed Google sign-in and voice worked before App Check was introduced. He subsequently refreshed staging and confirmed that both Google sign-in and a voice conversation also worked with App Check enforced.
 
 ## Recovery
 
@@ -35,4 +35,4 @@ If legitimate staging browsers are rejected, inspect App Check metrics and brows
 - Browser fixtures were then signed out and removed: the disposable learner and its 27 owned records were deleted. The App Check debug-token list was checked and contained zero registrations.
 - Production remains on `leadership-skill-builder-00024-lhd` and was not deployed.
 
-A fresh manual Google-popup sign-in and microphone/speaker check on the new revision remain the final browser checks. Earlier user confirmations apply to the previous revision. Authentication service-level enforcement is intentionally unchanged; the AI/backend and database protections are enforced.
+Gary confirmed both fresh Google sign-in and a voice conversation working on the new revision after being asked to refresh staging and test with App Check enforced. The final manual browser checks therefore passed on 31 October. Authentication service-level enforcement is intentionally unchanged; the AI/backend and database protections are enforced.

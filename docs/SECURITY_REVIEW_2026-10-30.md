@@ -52,3 +52,7 @@ Sources used to assess package reachability and subscription behaviour:
 ## Deployment evidence
 
 Staging website revision `leadership-skill-builder-staging-00007-l86` serves 100% of traffic from build `ae0b8437-648a-4bb1-913c-109dba8fe68b`, website source `d42e079`. The unpaid-subscription correction and audit documentation follow in commit `433906e`; the two affected billing functions were deployed separately. All 18 staging functions are ACTIVE. Production remains `leadership-skill-builder-00024-lhd`. The superseded build was cancelled before deployment. Both public homepage variants and the signed-in paid dashboard were inspected after release. No CSP errors appeared in the browser console. The automated browser did not complete a fresh Google popup. Gary subsequently confirmed Google sign-in and voice working on 31 October. These confirmations preceded App Check enforcement; post-enforcement results are recorded separately in APP_CHECK_STAGING.md.
+
+## App Check manual verification, 31 October 2026
+
+After App Check enforcement was deployed, Gary confirmed that both Google sign-in and a short voice conversation worked on refreshed staging. This closes the outstanding manual browser checks for this rollout. See APP_CHECK_STAGING.md for deployment evidence, automated verification and the remaining limits of this review. Production launch preparation and release-date checks remain separate.
