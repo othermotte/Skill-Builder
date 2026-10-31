@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 !.env.production
+!.env.staging
 node_modules
 functions/node_modules
 dist

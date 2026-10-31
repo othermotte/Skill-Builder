@@ -1,9 +1,16 @@
+import { callableAppCheck } from './appCheck';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { GoogleGenAI, Modality, Type } from '@google/genai';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
+import { freemiumEnabled, readAccess, checkPracticeAccess, trustedPracticeInstruction, saveFreeRecommendations } from './access';
+import { freeSkills } from './accessDomain';
+import { validateModelPayload, validatedTranscript, assertTextTurnAvailable } from './securityPolicy';
+export { getAccessAccount, chooseFreeScenario, listOrganisations, saveOrganisation, redeemOrganisationCode, listApprovedMembers, updateApprovedMembers } from './access';
+
+export { getBillingAccount, createCheckoutSession, createBillingPortalSession, stripeWebhook } from './billing';
 
 initializeApp();
 
@@ -24,8 +31,10 @@ const MAX_TEXT_TRANSCRIPT_CHARS = 60000;
 
 // Shared function options
 const fnOptions = {
+  ...callableAppCheck,
   region: 'europe-west1' as const,
   secrets: [geminiApiKey],
+  ...(process.env.FREEMIUM_ENABLED === 'true' ? { serviceAccount: 'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com', maxInstances: 3 } : {}),
 };
 
 // Helper to get authenticated AI client
@@ -45,9 +54,10 @@ function assertAuth(request: any) {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'You must be signed in.');
   }
-  if (request.auth.token.email_verified === false) {
+  if (request.auth.token.email_verified !== true) {
     throw new HttpsError('permission-denied', 'You must verify your email before using AI practice.');
   }
+  validateModelPayload(request.data);
 }
 
 function dayKey(date = new Date()) {
@@ -154,7 +164,7 @@ async function recordGeminiUsage(
  */
 export const getGeminiLiveToken = onCall(fnOptions, async (request) => {
   const sessionMode = request.data?.mode === 'tutorial' ? 'tutorial' : 'diagnostic';
-  const systemInstruction = String(request.data?.systemInstruction || '').trim();
+  const systemInstruction = freemiumEnabled() ? await trustedPracticeInstruction(request, 'voice') : String(request.data?.systemInstruction || '').trim();
   const requestedVoiceName = String(request.data?.voiceName || 'Kore').trim();
   const voiceName = /^[A-Za-z0-9_-]{1,32}$/.test(requestedVoiceName) ? requestedVoiceName : 'Kore';
 
@@ -179,8 +189,11 @@ export const getGeminiLiveToken = onCall(fnOptions, async (request) => {
 
   const ai = getLiveAI(apiKey);
   const now = Date.now();
-  const newSessionExpireTime = new Date(now + 60 * 1000).toISOString();
-  const expireTime = new Date(now + 30 * 60 * 1000).toISOString();
+  const access = freemiumEnabled() ? await readAccess(request) : null;
+  const grantExpiry = access?.accessUntil ?? Infinity;
+  const expiresAt = Math.min(now + 30 * 60 * 1000, grantExpiry);
+  const newSessionExpireTime = new Date(Math.min(now + 60 * 1000, expiresAt)).toISOString();
+  const expireTime = new Date(expiresAt).toISOString();
 
   const token = await ai.authTokens.create({
     config: {
@@ -211,7 +224,7 @@ export const getGeminiLiveToken = onCall(fnOptions, async (request) => {
     throw new HttpsError('internal', 'Unable to create Gemini Live token.');
   }
 
-  return { token: token.name, usage };
+  return { token: token.name, usage, systemInstruction };
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -253,7 +266,7 @@ function parseTextTranscript(value: unknown) {
 
 export const startGeminiTextSession = onCall(fnOptions, async (request) => {
   const mode: 'diagnostic' | 'tutorial' = request.data?.mode === 'tutorial' ? 'tutorial' : 'diagnostic';
-  const systemInstruction = String(request.data?.systemInstruction || '').trim();
+  const systemInstruction = freemiumEnabled() ? await trustedPracticeInstruction(request, 'text') : String(request.data?.systemInstruction || '').trim();
 
   if (!systemInstruction || systemInstruction.length > 30000) {
     throw new HttpsError('invalid-argument', 'Text session instructions are missing or too long.');
@@ -283,6 +296,8 @@ export const startGeminiTextSession = onCall(fnOptions, async (request) => {
     uid: request.auth!.uid,
     email: request.auth!.token.email || null,
     mode,
+    scenarioId: request.data?.scenarioId || null,
+    microSkillId: request.data?.microSkillId || null,
     model: ANALYSIS_MODEL,
     instructionHash: textInstructionHash(systemInstruction),
     expiresAt: new Date(Date.now() + TEXT_SESSION_DURATION_MS),
@@ -296,6 +311,7 @@ export const startGeminiTextSession = onCall(fnOptions, async (request) => {
     response: responseText,
     model: ANALYSIS_MODEL,
     usage,
+    systemInstruction,
   };
 });
 
@@ -319,6 +335,8 @@ export const continueGeminiTextSession = onCall(fnOptions, async (request) => {
     throw new HttpsError('permission-denied', 'This text session is not available.');
   }
 
+  await checkPracticeAccess(request, sessionData);
+
   const expiresAt = sessionData?.expiresAt?.toMillis?.() || 0;
   if (expiresAt <= Date.now()) {
     throw new HttpsError('deadline-exceeded', 'This text session has expired. Please start a new one.');
@@ -337,6 +355,12 @@ export const continueGeminiTextSession = onCall(fnOptions, async (request) => {
     })),
   ];
 
+  await db.runTransaction(async tx => {
+    const latest = (await tx.get(sessionRef)).data()!;
+    assertTextTurnAvailable(latest, Date.now());
+    tx.update(sessionRef, {turnCount: FieldValue.increment(1), processingUntil: Date.now() + 120000});
+  });
+  try {
   const ai = getAI(geminiApiKey.value());
   const response = await ai.models.generateContent({
     model: ANALYSIS_MODEL,
@@ -351,10 +375,12 @@ export const continueGeminiTextSession = onCall(fnOptions, async (request) => {
 
   await sessionRef.update({
     lastUsedAt: FieldValue.serverTimestamp(),
-    turnCount: FieldValue.increment(1),
   });
 
   return { response: responseText, model: ANALYSIS_MODEL };
+  } finally {
+    await sessionRef.update({processingUntil: 0});
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,7 +399,11 @@ export const getFeedbackForTranscript = onCall(
   { ...fnOptions, timeoutSeconds: 120 },
   async (request) => {
     assertAuth(request);
-    const { transcript, scenario, protocol } = request.data;
+    const context = await checkPracticeAccess(request);
+    const transcript = validatedTranscript(request.data?.transcript);
+    await recordGeminiUsage(request, 'assessment', DAILY_HELPER_AI_LIMIT);
+    const scenario = context?.scenario || request.data.scenario;
+    const protocol = context ? (await getFirestore().collection('system_logic').doc('globalAssessor').get()).data()?.content || '' : request.data.protocol;
 
     if (!transcript || transcript.length === 0) {
       throw new HttpsError('invalid-argument', 'Transcript is empty.');
@@ -457,8 +487,13 @@ export const getFeedbackForTranscript = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
+  const context = await checkPracticeAccess(request);
+  const access = freemiumEnabled() ? await readAccess(request) : null;
+  if (access && !access.fullAccess && access.freeMicroSkills.length) return access.freeMicroSkills;
   await recordGeminiUsage(request, 'micro_skill_suggestions', DAILY_HELPER_AI_LIMIT);
-  const { transcript, feedback, skillLibrary } = request.data;
+  const transcript = validatedTranscript(request.data?.transcript);
+  const feedback = request.data?.feedback;
+  const skillLibrary = context?.library || request.data.skillLibrary;
 
   const ai = getAI(geminiApiKey.value());
 
@@ -467,7 +502,7 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
     label: group.label,
     skills: group.skills.map((s: any) => ({
       id: s.id,
-      label: s.name,
+      label: s.name || s.label,
       micro_skills: s.micro_skills.map((ms: any) => ({ id: ms.id, label: ms.label })),
     })),
   }));
@@ -477,7 +512,7 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
     .join('\n');
 
   const prompt = `
-    Based on the transcript and assessment below, suggest 2-3 specific micro-skills from the provided library that this learner should practice next.
+    Based on the transcript and assessment below, suggest ${access && !access.fullAccess ? 5 : 3} distinct specific micro-skills from the provided library that this learner should practice next.
     
     ### CRITICAL INSTRUCTIONS:
     1. Address the learner directly in the FIRST PERSON (e.g., "You relied on..." instead of "The learner relied on...").
@@ -522,7 +557,8 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
   });
 
   const cleanedText = response.text?.replace(/```json/gi, '').replace(/```/g, '').trim() || '[]';
-  return JSON.parse(cleanedText);
+  const recommendations = freeSkills(JSON.parse(cleanedText), skillLibrary);
+  return access && !access.fullAccess ? saveFreeRecommendations(request, recommendations) : recommendations;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -531,7 +567,9 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
 
 export const generateSkillSnapshot = onCall(fnOptions, async (request) => {
   await recordGeminiUsage(request, 'skill_snapshot', DAILY_HELPER_AI_LIMIT);
-  const { microSkillLabel, evidence, history } = request.data;
+  const context = await checkPracticeAccess(request, { ...request.data, requiresMicroSkill: true });
+  const { evidence, history } = request.data;
+  const microSkillLabel = context?.micro?.label || request.data.microSkillLabel;
 
   const ai = getAI(geminiApiKey.value());
 
@@ -597,7 +635,9 @@ export const generateSkillSnapshot = onCall(fnOptions, async (request) => {
 
 export const analyzePracticeReflection = onCall(fnOptions, async (request) => {
   await recordGeminiUsage(request, 'practice_reflection', DAILY_HELPER_AI_LIMIT);
-  const { transcript, microSkillLabel } = request.data;
+  const context = await checkPracticeAccess(request, { ...request.data, requiresMicroSkill: true });
+  const transcript = validatedTranscript(request.data?.transcript);
+  const microSkillLabel = context?.micro?.label || request.data.microSkillLabel;
 
   const ai = getAI(geminiApiKey.value());
 

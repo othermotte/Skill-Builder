@@ -1,18 +1,22 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Role, Scenario, Skill, PracticeSession, PracticeAttempt, SkillLibrary } from '../types';
+import type { AccessAccount } from '../services/access';
 import { ScenarioCard } from './ScenarioCard';
 import { PrivacyModal, ContactModal } from './LegalModals';
 import { LabGuide } from './LabGuide';
 import { getAllUsers, getAllPracticeSessions, saveAppFeedback, patchOldAttempts } from '../services/firebase';
+import { freemiumEnabled } from '../firebaseConfig';
 import { INITIAL_SKILLS } from '../constants';
 import { AdminAnalytics } from './AdminAnalytics';
 import { AppFeedbackForm } from './AppFeedbackForm';
 
 interface DashboardPageProps {
   currentUser: User;
+  access?: AccessAccount | null;
   scenarios: Scenario[];
   skills: Skill[];
+  practiceSessions: PracticeSession[];
   practiceAttempts: PracticeAttempt[];
   appLibrary: SkillLibrary | null;
   onStartPractice: (scenario: Scenario) => void;
@@ -24,12 +28,14 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
-  currentUser, scenarios, skills, practiceSessions, practiceAttempts, appLibrary,
+  currentUser, access, scenarios, skills, practiceSessions, practiceAttempts, appLibrary,
   onStartPractice,
   onUserUpdate,
   onViewHistory,
   onViewSessionFeedback
 }) => {
+  const isFree = freemiumEnabled && !!access && !access.fullAccess;
+  const orderedScenarios = [...scenarios].sort((a, b) => Number(b.id === access?.freeScenarioId) - Number(a.id === access?.freeScenarioId));
   const [adminView, setAdminView] = useState<'admin' | 'practice'>('practice');
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showContact, setShowContact] = useState(false);
@@ -74,7 +80,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
 
   const renderActivePath = () => {
-    if (!latestSession) {
+    if (!latestSession || (isFree && !practiceSessions.some(s => s.scenarioId === access?.freeScenarioId))) {
       return (
         <div className="bg-indigo-600 text-white rounded-[3rem] p-10 shadow-2xl space-y-6 relative overflow-hidden group">
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl transition-transform group-hover:scale-125"></div>
@@ -86,10 +92,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </p>
           </div>
           <button
-            onClick={() => onStartPractice(scenarios[0])}
+            onClick={() => isFree && access?.freeScenarioId ? onStartPractice(scenarios.find(s => s.id === access.freeScenarioId)!) : freemiumEnabled ? document.getElementById('scenario-catalogue')?.scrollIntoView({ behavior: 'smooth' }) : onStartPractice(scenarios[0])}
             className="relative z-10 bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-gray-50 transition-all active:scale-[0.98]"
           >
-            Start First Lab
+            {isFree && access?.freeScenarioId ? 'Open your free scenario' : freemiumEnabled ? 'Choose your scenario' : 'Start First Lab'}
           </button>
         </div>
       );
@@ -109,6 +115,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     });
 
     for (const session of sorted) {
+      if (isFree && session.scenarioId !== access?.freeScenarioId) continue;
       if (!seenScenarios.has(session.scenarioId)) {
         seenScenarios.add(session.scenarioId);
         activeSessions.push(session);
@@ -217,16 +224,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       </section>
 
       {/* 3. SCENARIO LABS */}
-      <section className="space-y-12 px-4">
+      <section id="scenario-catalogue" className="space-y-12 px-4">
         <div className="space-y-2">
           <h3 className="text-2xl font-black tracking-tight text-gray-900 uppercase">SCENARIO LABS</h3>
-          <p className="text-gray-400 text-sm font-medium italic">Deep-dive scenarios to reveal your thinking patterns.</p>
+          <p className="text-gray-600 text-sm leading-relaxed">{isFree ? access?.freeScenarioId ? "Your chosen scenario is shown first. You can repeat its assessment and practise up to five personalised micro skills recommended from its assessment. Other scenarios require full access." : "Your free account includes one scenario of your choice and practice in up to five micro skills recommended from its assessment. Browse the scenarios, then confirm the one you want to keep. This choice is permanent." : "Explore the scenarios to reveal your thinking patterns."}</p>
         </div>
         <div className="grid grid-cols-1 gap-8">
-          {scenarios.map((scenario) => (
+          {orderedScenarios.map((scenario) => (
             <ScenarioCard
               key={scenario.id}
               scenario={scenario}
+              locked={isFree && !!access?.freeScenarioId && access.freeScenarioId !== scenario.id}
+              freeChoice={isFree && access?.freeScenarioId === scenario.id}
+              choosingFree={isFree && !access?.freeScenarioId}
               depth={scenarioDepthMap[scenario.id] || 0}
               onSelect={() => onStartPractice(scenario)}
             />

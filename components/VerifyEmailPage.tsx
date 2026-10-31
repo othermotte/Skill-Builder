@@ -114,6 +114,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({ user, onLogout
             {error && <p className="text-rose-600 text-center lg:text-left mb-4 text-sm bg-rose-50 p-2 rounded border border-rose-100 break-words">{error}</p>}
 
             <div className="space-y-3">
+              <button onClick={async () => { await user.reload(); if (user.emailVerified) { await user.getIdToken(true); location.reload(); } else setError('Your email has not been verified yet. Open the verification link, then try again.'); }} className="w-full bg-indigo-600 text-white p-3 rounded-xl">I have verified my email</button>
               <button
                 onClick={handleResend}
                 disabled={isSending}

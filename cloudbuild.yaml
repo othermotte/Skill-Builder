@@ -6,6 +6,9 @@ steps:
     args:
       - '-c'
       - |
+        test '$PROJECT_ID' = 'leadership-skill-builder-codex'
+        test '$BRANCH_NAME' = 'main'
+        test ! -f STAGING_ONLY
         cd functions
         npm ci
         npm run build
