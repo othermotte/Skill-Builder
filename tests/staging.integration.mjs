@@ -1,3 +1,4 @@
+import { stagingAppCheck } from './stagingAppCheck.mjs';
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
@@ -24,6 +25,7 @@ const oauth = () =>
   execFileSync("gcloud", ["auth", "print-access-token"], {
     encoding: "utf8",
   }).trim();
+const attestation = await stagingAppCheck(env, oauth());
 const authRoot = "https://identitytoolkit.googleapis.com/v1/";
 const endpoint = "https://europe-west1-" + project + ".cloudfunctions.net/";
 const fixtures = {
@@ -38,6 +40,7 @@ async function rest(url, data, privileged = false, method = "POST") {
     method,
     headers: {
       "Content-Type": "application/json",
+      "X-Firebase-AppCheck": attestation.token,
       ...(privileged
         ? { Authorization: "Bearer " + oauth(), "x-goog-user-project": project }
         : {}),
@@ -87,6 +90,7 @@ async function call(actor, name, data = {}) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Firebase-AppCheck": attestation.token,
       ...(actor ? { Authorization: "Bearer " + actor.token } : {}),
     },
     body: JSON.stringify({ data }),
@@ -336,6 +340,7 @@ try {
       headers: {
         Authorization: "Bearer " + learner.token,
         "Content-Type": "application/json",
+        "X-Firebase-AppCheck": attestation.token,
       },
       body: JSON.stringify({ fields: { fullAccess: { booleanValue: true } } }),
     },
@@ -344,6 +349,7 @@ try {
   console.log("PASS Firestore denies client entitlement escalation");
   console.log("STAGING INTEGRATION PASS");
 } finally {
+ try {
   for (const email of fixtures.emails) {
     const digest = await crypto.subtle.digest(
       "SHA-256",
@@ -365,6 +371,7 @@ try {
       true,
     );
   }
+  } finally { await attestation.cleanup(); }
   console.log(
     "Removed disposable users, organisation grants, approved lists and access accounts; preserved the existing administrator.",
   );

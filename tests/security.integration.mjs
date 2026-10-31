@@ -1,3 +1,4 @@
+import { stagingAppCheck } from './stagingAppCheck.mjs';
 // Explicit opt-in. Creates and removes only this run's disposable staging fixtures.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -9,7 +10,8 @@ const config=Object.fromEntries(readFileSync('.env.staging','utf8').trim().split
 const root='https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents/';
 const prefix='security-'+Date.now();const actors=[];const ownedPaths=[];
 const ownerToken=execFileSync('gcloud',['auth','print-access-token'],{encoding:'utf8'}).trim();
-async function request(url,{method='GET',data,token}={}){const r=await fetch(url,{method,headers:{'Content-Type':'application/json',Referer:'https://leadership-skill-builder-staging-600309447137.europe-west1.run.app/',...(token?{Authorization:'Bearer '+token}:{}),...(token===ownerToken?{'x-goog-user-project':project}:{})},...(data?{body:JSON.stringify(data)}:{})});const text=await r.text();let body={};try{body=text?JSON.parse(text):{}}catch{body=text}return{status:r.status,body};}
+const attestation = await stagingAppCheck(config, ownerToken);
+async function request(url,{method='GET',data,token,appCheck=attestation.token}={}){const r=await fetch(url,{method,headers:{'Content-Type':'application/json',...(appCheck && token!==ownerToken ? {'X-Firebase-AppCheck':appCheck}:{}),Referer:'https://leadership-skill-builder-staging-600309447137.europe-west1.run.app/',...(token?{Authorization:'Bearer '+token}:{}),...(token===ownerToken?{'x-goog-user-project':project}:{})},...(data?{body:JSON.stringify(data)}:{})});const text=await r.text();let body={};try{body=text?JSON.parse(text):{}}catch{body=text}return{status:r.status,body};}
 const call=(actor,name,data={})=>request('https://europe-west1-'+project+'.cloudfunctions.net/'+name,{method:'POST',token:actor?.token,data:{data}});
 const fields=data=>Object.fromEntries(Object.entries(data).map(([k,v])=>[k,typeof v==='number'?{integerValue:String(v)}:{stringValue:v}]));
 async function seed(path,data){ownedPaths.push(path);const r=await request(root+path,{method:'PATCH',token:ownerToken,data:{fields:fields(data)}});assert.equal(r.status,200,JSON.stringify(r));}
@@ -18,6 +20,17 @@ try{
  for(const endpoint of ['getAccessAccount','createCheckoutSession','getFeedbackForTranscript','getGeminiLiveToken','listApprovedMembers'])assert.equal((await call(null,endpoint)).status,401,endpoint);
  console.log('PASS unauthenticated callers cannot access model, billing or administrator operations.');
  const [a,b]=[await makeActor(1),await makeActor(2)];
+ for(const appCheck of [null,'invalid-attestation']) {
+   for(const name of ['getAccessAccount','getBillingAccount','createCheckoutSession','createBillingPortalSession','chooseFreeScenario','listOrganisations','saveOrganisation','listApprovedMembers','updateApprovedMembers','redeemOrganisationCode','getGeminiLiveToken','startGeminiTextSession','continueGeminiTextSession','getFeedbackForTranscript','getMicroSkillSuggestions','generateSkillSnapshot','analyzePracticeReflection']) {
+     const r=await request('https://europe-west1-'+project+'.cloudfunctions.net/'+name,{method:'POST',token:a.token,appCheck,data:{data:{}}});
+     assert.equal(r.status,401,name+' must reject a verified user without valid App Check');
+   }
+   console.log('PASS all 17 callable functions reject '+(appCheck ? 'forged' : 'missing')+' attestation for a verified signed-in learner.');
+   const direct=await request(root+'scenarios/lsb-explorer-1',{token:a.token,appCheck});
+   assert.equal(direct.status,403,'Firestore must reject missing or invalid App Check');
+ }
+ console.log('PASS all 17 callable functions and Firestore reject missing and invalid attestation, even with verified sign-in.');
+ assert.equal((await request(root+'scenarios/lsb-explorer-1',{token:a.token})).status,200);
  for(const actor of actors){await seed('users/'+actor.uid,{id:actor.uid,email:actor.email,role:'LEARNER'});ownedPaths.push('accessAccounts/'+actor.uid);}
  for(const collection of ['accessAccounts','commercialAccounts','organisationApprovals','organisations','geminiTextSessions'])assert.equal((await request(root+collection+'/'+a.uid,{token:a.token})).status,403,collection);
  const forged=await request(root+'accessAccounts/'+a.uid,{method:'PATCH',token:a.token,data:{fields:{fullAccess:{booleanValue:true}}}});assert.equal(forged.status,403);
@@ -46,9 +59,11 @@ try{
  const invalid=await request('https://europe-west1-'+project+'.cloudfunctions.net/stripeWebhook',{method:'POST',data:{}});assert.equal(invalid.status,400);
  console.log('PASS unsigned payment notifications cannot activate access.');
 }finally{
+ try {
  for(const path of [...new Set(ownedPaths)]){const r=await request(root+path,{method:'DELETE',token:ownerToken});assert.ok([200,404].includes(r.status));}
  for(const actor of actors){const r=await request('https://identitytoolkit.googleapis.com/v1/projects/'+project+'/accounts:delete',{method:'POST',token:ownerToken,data:{localId:actor.uid}});assert.equal(r.status,200);}
  // Quota rejection logs are disposable fixtures too, selected by this run's UIDs.
  for(const col of ['geminiUsageLogs','geminiUsageAlerts'])for(const actor of actors){const r=await request(root.slice(0,-1)+':runQuery',{method:'POST',token:ownerToken,data:{structuredQuery:{from:[{collectionId:col}],where:{fieldFilter:{field:{fieldPath:'uid'},op:'EQUAL',value:{stringValue:actor.uid}}}}}});if(r.status===200)for(const row of r.body)if(row.document)await request('https://firestore.googleapis.com/v1/'+row.document.name,{method:'DELETE',token:ownerToken});}
- console.log('Removed only this run’s disposable staging accounts and records.');
+ } finally { await attestation.cleanup(); }
+ console.log('Removed only this run’s disposable staging accounts, records and App Check credential.');
 }
