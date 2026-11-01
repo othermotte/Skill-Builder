@@ -1,6 +1,5 @@
 import {onCall,HttpsError} from 'firebase-functions/v2/https';
 import {getFirestore} from 'firebase-admin/firestore';
-import {getAuth} from 'firebase-admin/auth';
 import {callableAppCheck} from './appCheck';
 import {readAccess} from './access';
 import {EXPERIMENT,ATTRIBUTION_MS,validJourney,experimentReport} from './experimentDomain';
@@ -13,7 +12,7 @@ export const recordExperimentEvent=onCall(options,async request=>{
   if(!signed && !['landing_view','primary_cta','registration_started','plan_selected','withdraw'].includes(event))throw new HttpsError('unauthenticated','Sign in to record this milestone.');
   const uid=signed?request.auth!.uid:null;
   let eligible=true,createdAt=0;
-  if(uid){const access=await readAccess(request);eligible=!['admin','organisation'].includes(access.source);createdAt=Date.parse((await getAuth().getUser(uid)).metadata.creationTime);}
+  if(uid){const access=await readAccess(request);eligible=!['admin','organisation'].includes(access.source);const profile=await db.collection('users').doc(uid).get();createdAt=profile.createTime?.toMillis() || 0;}
   return db.runTransaction(async tx=>{
     const visitor=db.collection('experimentVisitors').doc(EXPERIMENT+'_'+visitorId);
     const saved=await tx.get(visitor);const v=saved.data();

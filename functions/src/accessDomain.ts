@@ -24,7 +24,7 @@ export function selectScenario(
 }
 export const FREE_MICRO_SKILL_LIMIT = 3;
 export function freeSkillLimit(saved: any[] = []): number {
-  return Math.max(FREE_MICRO_SKILL_LIMIT, Math.min(5, saved.length));
+  return Math.max(FREE_MICRO_SKILL_LIMIT, Math.min(5, Array.isArray(saved) ? saved.length : 0));
 }
 export function freeSkills(options: any[], library: any): any[] {
   const canonical = new Map<string, any>();

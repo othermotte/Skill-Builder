@@ -24,6 +24,7 @@ try{
    for(const name of ['getAccessAccount','getBillingAccount','createCheckoutSession','createBillingPortalSession','chooseFreeScenario','listOrganisations','saveOrganisation','listApprovedMembers','updateApprovedMembers','redeemOrganisationCode','getGeminiLiveToken','startGeminiTextSession','continueGeminiTextSession','getFeedbackForTranscript','getMicroSkillSuggestions','generateSkillSnapshot','analyzePracticeReflection','recordExperimentEvent','getExperimentReport']) {
      const r=await request('https://europe-west1-'+project+'.cloudfunctions.net/'+name,{method:'POST',token:a.token,appCheck,data:{data:{}}});
      assert.equal(r.status,401,name+' must reject a verified user without valid App Check');
+     assert.equal(r.body?.error?.status,'UNAUTHENTICATED',name+' must reach the callable App Check guard');
    }
    console.log('PASS all 19 callable functions reject '+(appCheck ? 'forged' : 'missing')+' attestation for a verified signed-in learner.');
    const direct=await request(root+'scenarios/lsb-explorer-1',{token:a.token,appCheck});

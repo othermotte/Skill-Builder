@@ -56,4 +56,4 @@ test("recommendations retain model order and assessment reasons, reject invented
   assert.equal(result[2].microSkillId, "m2");
 });
 
-test("new accounts get three skills while frozen five-skill grants retain their allowance",()=>{assert.equal(freeSkillLimit(),3);assert.equal(freeSkillLimit([]),3);assert.equal(freeSkillLimit(Array(3)),3);assert.equal(freeSkillLimit(Array(5)),5);});
+test("new accounts get three skills while frozen five-skill grants retain their allowance",()=>{assert.equal(freeSkillLimit(),3);assert.equal(freeSkillLimit(null),3);assert.equal(freeSkillLimit([]),3);assert.equal(freeSkillLimit(Array(3)),3);assert.equal(freeSkillLimit(Array(5)),5);});
