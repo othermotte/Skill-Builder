@@ -2,7 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, freemiumEnabled } from '../firebaseConfig';
 import { chooseHomepageVariant, previewVariant, EXPERIMENT_ID, HomepageVariant } from '../utils/homepageExperiment';
 const key = 'skillBuilderLandingV1';
-interface Assignment { visitorId: string; variant: HomepageVariant; consent: boolean | null; campaign: Record<string,string>; }
+interface Assignment { visitorId: string; variant: HomepageVariant; consent: boolean | null; exposed?: boolean; campaign: Record<string,string>; }
 let memory: Assignment | null = null;
 let qa = false;
 let pending: Promise<unknown> = Promise.resolve();
@@ -28,6 +28,7 @@ export function experiment() {
   if(!qa)save();
   return {...memory,shownVariant:preview || memory.variant,qa};
 }
+export function markLandingView() { experiment();memory!.exposed=true;if(!qa)save();void trackExperiment('landing_view'); }
 export function setExperimentConsent(consent:boolean) {
   const state=experiment();
   memory!.consent=consent;if(!qa)save();
@@ -37,7 +38,7 @@ export function setExperimentConsent(consent:boolean) {
 export async function trackExperiment(event:string) {
   if(!freemiumEnabled)return;
   const state=experiment();
-  if(state.qa || !state.consent || navigator.doNotTrack === '1')return;
+  if(state.qa || !state.consent || !state.exposed || navigator.doNotTrack === '1')return;
   pending=pending.catch(()=>{}).then(()=>httpsCallable(functions,'recordExperimentEvent')({experiment:EXPERIMENT_ID,visitorId:state.visitorId,variant:state.variant,event,campaign:state.campaign})).catch(()=>{});
   await pending;
 }

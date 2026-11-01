@@ -2,7 +2,7 @@ import React, {useEffect,useState} from 'react';
 import {freemiumEnabled} from '../firebaseConfig';
 import {LegacyLoginPage} from './LegacyLoginPage';
 import {homepageCopy} from '../utils/homepageExperiment';
-import {experiment,setExperimentConsent,trackExperiment} from '../services/experiment';
+import {experiment,setExperimentConsent,trackExperiment,markLandingView} from '../services/experiment';
 import {loginWithEmail,signupWithEmail,loginWithGoogle,sendPasswordReset} from '../services/firebase';
 import {PublicPlans} from './PublicPlans';
 import {PrivacyModal,ContactModal} from './LegalModals';
@@ -19,7 +19,7 @@ function CommercialEntry() {
   const copy=homepageCopy[state.shownVariant];
   const account=['/login','/signup','/reset-password'].includes(path);
   useEffect(()=>{const pop=()=>{setPath(location.pathname);setMode(location.pathname==='/signup'?'signup':location.pathname==='/reset-password'?'reset':'login');};window.addEventListener('popstate',pop);return()=>window.removeEventListener('popstate',pop);},[]);
-  useEffect(()=>{if(!account)void trackExperiment('landing_view');},[account]);
+  useEffect(()=>{if(!account)markLandingView();},[account]);
   const navigate=(next:string)=>{history.pushState({},'',next+location.search);setPath(next);if(next==='/signup')void trackExperiment('registration_started');setMode(next==='/signup'?'signup':next==='/reset-password'?'reset':'login');setError('');setNotice('');window.scrollTo(0,0);};
   const choose=(plan?:PaidPlan)=>{try{if(plan)sessionStorage.setItem('skillBuilderPlan',plan);else sessionStorage.removeItem('skillBuilderPlan');}catch{}void trackExperiment(plan?'plan_selected':'primary_cta');void trackExperiment('registration_started');navigate('/signup');};
   const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{if(mode==='reset'){await sendPasswordReset(email);setNotice('Check your inbox for a password reset link.');}else if(mode==='signup'){await signupWithEmail(email,password);}else await loginWithEmail(email,password);}catch(e:any){setError(e.message || 'Please try again.');}finally{setBusy(false);}};
