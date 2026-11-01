@@ -294,8 +294,8 @@ try {
     },
     skillLibrary: { skill_groups: [] },
   });
-  assert.equal(recommendations.length, 5);
-  assert.equal(new Set(recommendations.map((m) => m.microSkillId)).size, 5);
+  assert.equal(recommendations.length, 3);
+  assert.equal(new Set(recommendations.map((m) => m.microSkillId)).size, 3);
   const repeated = await ok(learner, "getMicroSkillSuggestions", {
     scenarioId: "lsb-explorer-1",
     transcript: [],
@@ -327,7 +327,7 @@ try {
     voice.systemInstruction.includes(recommendations[0].microSkillLabel),
   );
   console.log(
-    "PASS five relevant canonical micro skills, frozen allocation, snapshot authorisation and real Live token",
+    "PASS three relevant canonical micro skills, frozen allocation, snapshot authorisation and real Live token",
   );
   // Verify Firestore client rules protect all entitlements and admin roles.
   const write = await fetch(

@@ -30,8 +30,8 @@ export const AccessPanel: React.FC<{
                 )
                 .join("; ")
             : scenarioTitle
-              ? `Your free scenario is ${scenarioTitle}. Practise micro skills recommended from its assessment, with up to five included in your free account. Your choice stays with your account.`
-              : "Choose one scenario to keep. Your free account includes practice in up to five micro skills relevant to your assessment. You can return to your chosen scenario and those skills to build your practice."}
+              ? `Your free scenario is ${scenarioTitle}. Practise micro skills recommended from its assessment, with up to ${access.freeMicroSkillLimit} included in your free account. Your choice stays with your account.`
+              : `Choose one scenario to keep. Your free account includes practice in up to ${access.freeMicroSkillLimit} micro skills relevant to your assessment. You can return to your chosen scenario and those skills to build your practice.`}
       </p>
     </div>
   </section>

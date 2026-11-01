@@ -34,6 +34,9 @@ export const PrivacyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                     We use Google reCAPTCHA Enterprise through Firebase App Check to help prevent automated abuse. Google processes browser and device signals for this purpose. Google’s <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" className="underline">Terms of Service</a> apply.
                 </p>
                 <p className="mt-3">
+                    If you allow journey analytics, we record a random browser identifier, landing-page version, limited campaign information and milestones such as registration, practice and checkout. We link these to your account and verified payments for a 30-day comparison. Assessment responses and coaching transcripts are not included. You can turn this off on the public page.
+                </p>
+                <p className="mt-3">
                     Your learning records are not published or made available to other learners. Payments are handled by Stripe, which receives your email address and transaction details. Card details entered in Stripe Checkout are not stored by Skill Builder.
                 </p>
             </div>

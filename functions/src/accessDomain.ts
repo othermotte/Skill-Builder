@@ -22,6 +22,10 @@ export function selectScenario(
     throw new Error("Your free scenario has already been chosen.");
   return requested;
 }
+export const FREE_MICRO_SKILL_LIMIT = 3;
+export function freeSkillLimit(saved: any[] = []): number {
+  return Math.max(FREE_MICRO_SKILL_LIMIT, Math.min(5, saved.length));
+}
 export function freeSkills(options: any[], library: any): any[] {
   const canonical = new Map<string, any>();
   for (const group of library.skill_groups || [])
@@ -44,7 +48,7 @@ export function freeSkills(options: any[], library: any): any[] {
         !seen.has(o.microSkillId) &&
         seen.add(o.microSkillId),
     )
-    .slice(0, 5)
+    .slice(0, FREE_MICRO_SKILL_LIMIT)
     .map((o) => ({
       ...canonical.get(o.microSkillId),
       reason: String(o.reason || "").slice(0, 4000),

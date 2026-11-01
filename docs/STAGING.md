@@ -59,3 +59,5 @@ Hosted sandbox verification on 26 October 2026: all three Checkout sessions open
 ## App Check
 
 See [App Check staging](APP_CHECK_STAGING.md) for the restricted Enterprise key, callable and Firestore enforcement, disposable test attestation and recovery steps. Google sign-in and voice were confirmed by Gary on 31 October before this additional protection was introduced; the rollout record distinguishes fresh checks after enforcement.
+
+The November landing-page change gives new free grants three micro skills while retaining existing frozen five-skill grants. See HOMEPAGE_REVIEW.md for the dedicated account routes, optional journey measurement, preview exclusions and administrator comparison.

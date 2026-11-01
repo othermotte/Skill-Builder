@@ -21,15 +21,15 @@ try{
  console.log('PASS unauthenticated callers cannot access model, billing or administrator operations.');
  const [a,b]=[await makeActor(1),await makeActor(2)];
  for(const appCheck of [null,'invalid-attestation']) {
-   for(const name of ['getAccessAccount','getBillingAccount','createCheckoutSession','createBillingPortalSession','chooseFreeScenario','listOrganisations','saveOrganisation','listApprovedMembers','updateApprovedMembers','redeemOrganisationCode','getGeminiLiveToken','startGeminiTextSession','continueGeminiTextSession','getFeedbackForTranscript','getMicroSkillSuggestions','generateSkillSnapshot','analyzePracticeReflection']) {
+   for(const name of ['getAccessAccount','getBillingAccount','createCheckoutSession','createBillingPortalSession','chooseFreeScenario','listOrganisations','saveOrganisation','listApprovedMembers','updateApprovedMembers','redeemOrganisationCode','getGeminiLiveToken','startGeminiTextSession','continueGeminiTextSession','getFeedbackForTranscript','getMicroSkillSuggestions','generateSkillSnapshot','analyzePracticeReflection','recordExperimentEvent','getExperimentReport']) {
      const r=await request('https://europe-west1-'+project+'.cloudfunctions.net/'+name,{method:'POST',token:a.token,appCheck,data:{data:{}}});
      assert.equal(r.status,401,name+' must reject a verified user without valid App Check');
    }
-   console.log('PASS all 17 callable functions reject '+(appCheck ? 'forged' : 'missing')+' attestation for a verified signed-in learner.');
+   console.log('PASS all 19 callable functions reject '+(appCheck ? 'forged' : 'missing')+' attestation for a verified signed-in learner.');
    const direct=await request(root+'scenarios/lsb-explorer-1',{token:a.token,appCheck});
    assert.equal(direct.status,403,'Firestore must reject missing or invalid App Check');
  }
- console.log('PASS all 17 callable functions and Firestore reject missing and invalid attestation, even with verified sign-in.');
+ console.log('PASS all 19 callable functions and Firestore reject missing and invalid attestation, even with verified sign-in.');
  assert.equal((await request(root+'scenarios/lsb-explorer-1',{token:a.token})).status,200);
  for(const actor of actors){await seed('users/'+actor.uid,{id:actor.uid,email:actor.email,role:'LEARNER'});ownedPaths.push('accessAccounts/'+actor.uid);}
  for(const collection of ['accessAccounts','commercialAccounts','organisationApprovals','organisations','geminiTextSessions'])assert.equal((await request(root+collection+'/'+a.uid,{token:a.token})).status,403,collection);

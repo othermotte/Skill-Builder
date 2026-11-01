@@ -4,6 +4,7 @@ const {
   activeGrant,
   selectScenario,
   freeSkills,
+  freeSkillLimit,
 } = require("../functions/lib/accessDomain.js");
 test("organisation grants expire at the boundary and revocation overrides never-expiring access", () => {
   const g = { expiresAt: 100, revokedAt: null };
@@ -49,8 +50,10 @@ test("recommendations retain model order and assessment reasons, reject invented
     { microSkillId: "m0" },
   ];
   const result = freeSkills(suggestions, library);
-  assert.equal(result.length, 5);
+  assert.equal(result.length, 3);
   assert.equal(result[0].reason, "Evidence 0");
   assert.equal(result[0].groupLabel, "Group");
-  assert.equal(result[4].microSkillId, "m4");
+  assert.equal(result[2].microSkillId, "m2");
 });
+
+test("new accounts get three skills while frozen five-skill grants retain their allowance",()=>{assert.equal(freeSkillLimit(),3);assert.equal(freeSkillLimit([]),3);assert.equal(freeSkillLimit(Array(3)),3);assert.equal(freeSkillLimit(Array(5)),5);});

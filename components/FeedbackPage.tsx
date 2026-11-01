@@ -14,6 +14,7 @@ interface FeedbackPageProps {
     onViewHistory: () => void;
     onBeginPracticeLoop: (groupId: string, microSkillId: string, reason: string) => Promise<void>;
     allowMoreRecommendations?: boolean;
+    freeMicroSkillLimit?: number;
     initialView?: 'feedback' | 'choose_focus';
     onSessionUpdate?: (session: PracticeSession) => void;
     onRetryAssessment?: () => void;
@@ -75,7 +76,7 @@ const StarRating: React.FC<{ initialRating?: number; onRate: (rating: number) =>
 export const FeedbackPage: React.FC<FeedbackPageProps> = ({
     practiceSession, scenario, skills, practiceAttempts,
     onBackToDashboard, onViewHistory, onBeginPracticeLoop,
-    allowMoreRecommendations = true, initialView = 'feedback', onSessionUpdate, onRetryAssessment
+    allowMoreRecommendations = true, freeMicroSkillLimit = 3, initialView = 'feedback', onSessionUpdate, onRetryAssessment
 }) => {
     const [showTranscript, setShowTranscript] = useState(false);
     const [viewState, setViewState] = useState<'feedback' | 'choose_focus'>(initialView);
@@ -271,7 +272,7 @@ export const FeedbackPage: React.FC<FeedbackPageProps> = ({
                     <h2 className="text-4xl md:text-6xl font-black tracking-tighter text-gray-900 leading-none">
                         Choose Your <span className="text-indigo-500">Focus</span>.
                     </h2>
-                    <p className="text-gray-500 text-lg font-medium">{allowMoreRecommendations ? 'Choose a micro skill to practise next. Complete all suggested targets to unlock new recommendations.' : 'Choose a recommended micro skill to practise next. Your free account includes practice in up to five micro skills.'}</p>
+                    <p className="text-gray-500 text-lg font-medium">{allowMoreRecommendations ? 'Choose a micro skill to practise next. Complete all suggested targets to unlock new recommendations.' : `Choose a recommended micro skill to practise next. Your free account includes practice in up to ${freeMicroSkillLimit} micro skills.`}</p>
                 </div>
 
                 {isLoadingSuggestions ? (

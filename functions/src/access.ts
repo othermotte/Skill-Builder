@@ -4,7 +4,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "crypto";
 import { normaliseEmail } from "./emailRoster";
 import { accessFor, BillingAccount } from './billingDomain';
-import { activeGrant, selectScenario } from "./accessDomain";
+import { activeGrant, selectScenario, FREE_MICRO_SKILL_LIMIT, freeSkillLimit } from "./accessDomain";
 const options = {
   ...callableAppCheck,
   region: "europe-west1" as const,
@@ -99,7 +99,7 @@ export async function readAccess(request: any) {
     organisations,
     freeScenarioId: account.freeScenarioId || null,
     freeMicroSkills: account.freeMicroSkills || [],
-    freeMicroSkillLimit: 5,
+    freeMicroSkillLimit: freeSkillLimit(account.freeMicroSkills),
   };
 }
 export const getAccessAccount = onCall(options, readAccess);
@@ -215,10 +215,10 @@ export async function saveFreeRecommendations(
     const snap = await tx.get(ref);
     const saved = snap.data()?.freeMicroSkills;
     if (saved?.length) return saved;
-    if (suggestions.length !== 5)
+    if (suggestions.length !== FREE_MICRO_SKILL_LIMIT)
       throw new HttpsError(
         "internal",
-        "Five distinct recommendations could not be generated. Please try again.",
+        "Three distinct recommendations could not be generated. Please try again.",
       );
     tx.set(
       ref,

@@ -1,3 +1,4 @@
+export {recordExperimentEvent,getExperimentReport} from './experiment';
 import { callableAppCheck } from './appCheck';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { GoogleGenAI, Modality, Type } from '@google/genai';
@@ -512,7 +513,7 @@ export const getMicroSkillSuggestions = onCall(fnOptions, async (request) => {
     .join('\n');
 
   const prompt = `
-    Based on the transcript and assessment below, suggest ${access && !access.fullAccess ? 5 : 3} distinct specific micro-skills from the provided library that this learner should practice next.
+    Based on the transcript and assessment below, suggest 3 distinct specific micro-skills from the provided library that this learner should practice next.
     
     ### CRITICAL INSTRUCTIONS:
     1. Address the learner directly in the FIRST PERSON (e.g., "You relied on..." instead of "The learner relied on...").

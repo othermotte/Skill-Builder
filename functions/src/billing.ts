@@ -1,3 +1,4 @@
+import {recordCheckoutMilestone} from './experiment';
 import { stagingGuard, readAccess } from './access';
 import { callableAppCheck } from './appCheck';
 const runtimeOptions = { region: 'europe-west1' as const, maxInstances: 3, serviceAccount: 'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com' };
@@ -150,6 +151,7 @@ export const createCheckoutSession = onCall({ ...billingOptions, ...callableAppC
     }, { idempotencyKey: `skill-builder-checkout-${uid}-${attempt}` });
     await ref.update({ pendingCheckoutId: session.id });
     if (!session.url) throw new HttpsError('internal', 'Checkout could not be opened.');
+    await recordCheckoutMilestone(uid);
     return { url: session.url };
   } finally { await ref.update({ checkoutLockUntil: 0 }); }
 });

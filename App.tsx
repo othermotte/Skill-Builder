@@ -1,3 +1,4 @@
+import {identifyExperiment,trackExperiment} from './services/experiment';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
@@ -113,6 +114,7 @@ const App: React.FC = () => {
       if (generation !== loadGeneration.current) return;
       setAccess(loadedAccess);
       setAppUser(loadedAppUser);
+      if(freemiumEnabled)void identifyExperiment();
       setScenarios(loadedScenarios);
       setSkills(loadedSkills);
       setIsLoadingData(false);
@@ -179,6 +181,7 @@ const App: React.FC = () => {
     if (!selectedScenario) return;
     setInteractionMedium(medium);
     setActivePage('roleplay');
+    void trackExperiment('scenario_started');
     logEvent(appUser?.id!, 'assessor_lab_started', { scenarioId: selectedScenario.id, interactionMedium: medium });
   };
 
@@ -221,6 +224,7 @@ const App: React.FC = () => {
   const handlePracticeLoopStart = (medium: InteractionMedium) => {
     setInteractionMedium(medium);
     setActivePage('roleplay');
+    void trackExperiment('micro_started');
     logEvent(appUser?.id!, 'practice_loop_started', { microSkillId: activeMicroSkill?.id, interactionMedium: medium });
   };
 
@@ -240,6 +244,7 @@ const App: React.FC = () => {
         };
 
         if (isCompleted) {
+          void trackExperiment('micro_completed');
           attemptPayload.completedAt = new Date().toISOString();
         }
 
@@ -262,6 +267,7 @@ const App: React.FC = () => {
 
       // Diagnostic scenario flow: save the PracticeSession record normally
       const savedSession = await savePracticeSession(completedSession);
+      if(completedSession.status === 'completed')void trackExperiment('scenario_completed');
       setPracticeSessions(prev => [savedSession, ...prev]);
       setCurrentPracticeSession(savedSession);
 
@@ -278,6 +284,7 @@ const App: React.FC = () => {
     }
 
     if (isDiagnostic) {
+      void trackExperiment('feedback_viewed');
       setFeedbackInitialView('feedback'); // Always show Rubric after a fresh scenario
       setActivePage('feedback');
     } else {
@@ -365,6 +372,7 @@ const App: React.FC = () => {
             setSelectedScenario(scenario || null);
             setCurrentPracticeSession(s);
             setFeedbackInitialView(initialView);
+            if(initialView==='feedback')void trackExperiment('feedback_viewed');
             setActivePage('feedback');
           }}
         />;
@@ -398,6 +406,7 @@ const App: React.FC = () => {
           onViewHistory={() => setActivePage('history')}
           onBeginPracticeLoop={handleBeginPracticeLoop}
           allowMoreRecommendations={!freemiumEnabled || !!access?.fullAccess}
+          freeMicroSkillLimit={access?.freeMicroSkillLimit || 3}
           initialView={feedbackInitialView}
           onSessionUpdate={(updatedSession) => {
             setCurrentPracticeSession(updatedSession);
@@ -467,7 +476,7 @@ const App: React.FC = () => {
       {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <AccessPanel access={access} email={appUser.email} scenarioTitle={scenarios.find(s => s.id === access.freeScenarioId)?.title} />}
       {accessError && <div role="alert" className="p-5 text-center bg-amber-50">{accessError} <button onClick={() => setAccessError(null)} className="underline">Dismiss</button></div>}
       {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <BillingPanel uid={firebaseUser.uid} access={access} onRefresh={async () => { const updated = await getAccessAccount(); if (auth.currentUser?.uid === firebaseUser.uid) setAccess(updated); }} />}
-      {confirmScenario && <div role="dialog" aria-modal="true" aria-labelledby="scenario-choice-title" className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 max-w-lg space-y-5 max-h-[85dvh] overflow-y-auto"><h2 id="scenario-choice-title" className="text-2xl font-bold">Choose {confirmScenario.title}?</h2><p>This will be your permanent free scenario. You can repeat its assessment and practise up to five micro skills recommended from your evaluation. Other scenarios require full access. You can keep browsing before making your choice.</p><details className="border rounded-xl p-3"><summary className="cursor-pointer font-semibold">Read the scenario</summary><p className="text-sm whitespace-pre-wrap mt-3">{confirmScenario.description}</p></details>{accessError && <p role="alert" className="text-rose-700 text-sm">{accessError}</p>}<button disabled={choosingScenario} className="bg-indigo-600 text-white p-3 rounded-xl disabled:opacity-50" onClick={async () => { const scenario = confirmScenario; setChoosingScenario(true); try { const updated = await chooseFreeScenario(scenario.id); setAccess(updated); setConfirmScenario(null); setSelectedScenario(scenario); setCurrentPracticeSession(null); setActiveMicroSkill(null); setPracticeType('diagnostic'); setInteractionMedium(null); setActivePage('assessment-launch'); } catch(e: any) { setAccessError(e.message); } finally { setChoosingScenario(false); } }}>{choosingScenario ? 'Saving…' : 'Confirm my free scenario'}</button> <button disabled={choosingScenario} onClick={() => setConfirmScenario(null)} className="p-3 underline">Keep browsing</button></div></div>}
+      {confirmScenario && <div role="dialog" aria-modal="true" aria-labelledby="scenario-choice-title" className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 max-w-lg space-y-5 max-h-[85dvh] overflow-y-auto"><h2 id="scenario-choice-title" className="text-2xl font-bold">Choose {confirmScenario.title}?</h2><p>This will be your permanent free scenario. You can repeat its assessment and practise up to {access?.freeMicroSkillLimit || 3} micro skills recommended from your evaluation. Other scenarios require full access. You can keep browsing before making your choice.</p><details className="border rounded-xl p-3"><summary className="cursor-pointer font-semibold">Read the scenario</summary><p className="text-sm whitespace-pre-wrap mt-3">{confirmScenario.description}</p></details>{accessError && <p role="alert" className="text-rose-700 text-sm">{accessError}</p>}<button disabled={choosingScenario} className="bg-indigo-600 text-white p-3 rounded-xl disabled:opacity-50" onClick={async () => { const scenario = confirmScenario; setChoosingScenario(true); try { const updated = await chooseFreeScenario(scenario.id); setAccess(updated); setConfirmScenario(null); setSelectedScenario(scenario); setCurrentPracticeSession(null); setActiveMicroSkill(null); setPracticeType('diagnostic'); setInteractionMedium(null); setActivePage('assessment-launch'); } catch(e: any) { setAccessError(e.message); } finally { setChoosingScenario(false); } }}>{choosingScenario ? 'Saving…' : 'Confirm my free scenario'}</button> <button disabled={choosingScenario} onClick={() => setConfirmScenario(null)} className="p-3 underline">Keep browsing</button></div></div>}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       {appUser && (
         <AppFeedbackModal 
