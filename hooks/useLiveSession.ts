@@ -36,13 +36,15 @@ const initialTranscriptDebug: TranscriptDebugState = {
 interface UseLiveSessionProps {
   voiceName: string;
   systemInstruction: string;
+  scenarioId?: string;
+  microSkillId?: string;
   omitGlobalOS?: boolean;
   mode?: 'diagnostic' | 'tutorial';
   initialPrompt?: string;
   debugLabel?: string;
 }
 
-export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = false, mode = 'diagnostic', initialPrompt: initialPromptOverride, debugLabel }: UseLiveSessionProps) => {
+export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = false, mode = 'diagnostic', initialPrompt: initialPromptOverride, debugLabel, scenarioId, microSkillId }: UseLiveSessionProps) => {
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<SessionErrorType>(null);
@@ -167,7 +169,7 @@ export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = fa
         ? 'I am ready to begin the micro-skill practice. Please start the first rep.'
         : 'I have read the scenario and am ready. Begin the assessment with your first scenario-specific question.');
 
-      const combinedInstruction = `
+      let combinedInstruction = `
         ${systemInstruction}
 
         ### SESSION OPENING
@@ -178,10 +180,11 @@ export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = fa
       // The real API key never touches the browser. The token is constrained to
       // the same Live setup config this client will use below.
       const getToken = httpsCallable<
-        { mode: 'diagnostic' | 'tutorial'; systemInstruction: string; voiceName: string },
-        { token: string; usage?: UsageStatus }
+        { mode: 'diagnostic' | 'tutorial'; systemInstruction: string; voiceName: string; scenarioId?: string; microSkillId?: string },
+        { token: string; usage?: UsageStatus; systemInstruction?: string }
       >(functions, 'getGeminiLiveToken');
-      const tokenResult = await getToken({ mode, systemInstruction: combinedInstruction, voiceName });
+      const tokenResult = await getToken({ mode, systemInstruction: combinedInstruction, voiceName, scenarioId, microSkillId: microSkillId || null });
+      if (tokenResult.data.systemInstruction) combinedInstruction = tokenResult.data.systemInstruction;
       const ephemeralToken = tokenResult.data.token;
       if (tokenResult.data.usage) {
         setUsageStatus(tokenResult.data.usage);
@@ -301,7 +304,7 @@ export const useLiveSession = ({ voiceName, systemInstruction, omitGlobalOS = fa
       setStatus('error');
       cleanup();
     }
-  }, [voiceName, systemInstruction, omitGlobalOS, mode, initialPromptOverride, debugLabel, cleanup]);
+  }, [voiceName, systemInstruction, omitGlobalOS, mode, initialPromptOverride, debugLabel, scenarioId, microSkillId, cleanup]);
 
   const handleServerMessage = async (message: LiveServerMessage) => {
     const ctx = audioContextRef.current;

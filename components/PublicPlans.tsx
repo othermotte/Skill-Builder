@@ -1,0 +1,6 @@
+import React from 'react';
+import { OFFER, PaidPlan } from '../functions/src/billingDomain';
+export const PublicPlans: React.FC<{onFree?:()=>void;onPlan:(plan:PaidPlan)=>void}> = ({onPlan}) => <section aria-label="Paid access plans">
+  <div className="grid md:grid-cols-3 gap-5">{(Object.keys(OFFER) as PaidPlan[]).map(plan=><article key={plan} className="border border-gray-200 bg-white rounded-2xl p-7 flex flex-col gap-4"><h3 className="font-bold text-lg">{OFFER[plan].label}</h3><p className="text-3xl font-bold">US${(OFFER[plan].amount/100).toFixed(2)}</p><p className="text-sm text-gray-600 flex-grow">{plan==='month_pass'?'One calendar month. No automatic renewal.':plan==='monthly'?'Renews monthly. Cancel renewal any time.':'Renews annually. Cancel renewal any time.'}</p><button onClick={()=>onPlan(plan)} className="border border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl p-3 font-semibold">Choose {plan==='month_pass'?'one month':plan==='monthly'?'monthly':'annual'}</button></article>)}</div>
+  <p className="text-sm text-gray-500 mt-5">Staging preview: checkout uses Stripe test mode. No real payments are taken. You will sign in before reviewing your plan and continuing to checkout.</p>
+</section>;

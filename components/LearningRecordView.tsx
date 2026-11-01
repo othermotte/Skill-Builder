@@ -61,7 +61,7 @@ export const LearningRecordView: React.FC<LearningRecordViewProps> = ({
 
   const scoreItems = useMemo(() => {
     if (!feedback?.scores) return [];
-    return Object.entries(feedback.scores).map(([id, value]) => ({
+    return (Object.entries(feedback.scores) as [string, { score: number; justification: string }][]).map(([id, value]) => ({
       id,
       name: skills.find(skill => skill.id === id)?.name || id.replace(/_/g, ' '),
       score: value.score,

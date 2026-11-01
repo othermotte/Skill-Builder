@@ -163,6 +163,8 @@ ${memoryList}
     transcriptDebug
   } = useLiveSession({
     voiceName: 'Kore',
+    scenarioId: scenario.id,
+    microSkillId: practiceMode?.microSkill.id,
     systemInstruction: combinedInstruction,
     omitGlobalOS: true,
     mode,
@@ -192,7 +194,8 @@ ${memoryList}
     try {
       const instructionForSession = textSystemInstruction;
       textSessionInstructionRef.current = instructionForSession;
-      const started = await startTextConversation(mode, instructionForSession);
+      const started = await startTextConversation(mode, instructionForSession, scenario.id, practiceMode?.microSkill.id);
+      if (started.systemInstruction) textSessionInstructionRef.current = started.systemInstruction;
       setTextSessionId(started.sessionId);
       setTextConversationModel(started.model);
       setTextUsageStatus(started.usage || null);
