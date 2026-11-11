@@ -1,0 +1,12 @@
+{
+  "FREEMIUM_ENABLED": "true",
+  "BILLING_ENABLED": "true",
+  "STRIPE_MODE": "live",
+  "APP_BASE_URL": "https://leadershipskillbuilder.ai",
+  "STRIPE_PRODUCT_ID": "",
+  "STRIPE_PRICE_MONTH_PASS": "",
+  "STRIPE_PRICE_MONTHLY": "",
+  "STRIPE_PRICE_ANNUAL": "",
+  "STRIPE_PORTAL_CONFIGURATION": "",
+  "STRIPE_WEBHOOK_ENDPOINT": ""
+}

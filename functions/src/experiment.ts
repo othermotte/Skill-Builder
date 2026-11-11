@@ -1,12 +1,13 @@
 import {onCall,HttpsError} from 'firebase-functions/v2/https';
 import {getFirestore} from 'firebase-admin/firestore';
 import {callableAppCheck} from './appCheck';
+import {deploymentPolicy,runtimeOptions} from './deploymentPolicy';
 import {readAccess} from './access';
 import {EXPERIMENT,ATTRIBUTION_MS,validJourney,experimentReport} from './experimentDomain';
-const options={region:'europe-west1' as const,maxInstances:2,serviceAccount:'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com',...callableAppCheck};
-function staging(){if(process.env.GCLOUD_PROJECT!=='leadership-skill-builder-stg'&&process.env.FUNCTIONS_EMULATOR!=='true')throw new HttpsError('failed-precondition','Experiment reporting is restricted to staging.');}
+const options={...runtimeOptions,maxInstances:2,...callableAppCheck};
+function assertDeployment(){try{deploymentPolicy();}catch(error:any){throw new HttpsError('failed-precondition',error.message);}}
 export const recordExperimentEvent=onCall(options,async request=>{
-  staging();let data;try{data=validJourney(request.data);}catch{throw new HttpsError('invalid-argument','Invalid journey event.');}
+  assertDeployment();let data;try{data=validJourney(request.data);}catch{throw new HttpsError('invalid-argument','Invalid journey event.');}
   const {visitorId,variant,event,campaign}=data;const db=getFirestore(),now=Date.now();
   const signed=!!request.auth&&request.auth.token.email_verified===true;
   if(!signed && !['landing_view','primary_cta','registration_started','plan_selected','withdraw'].includes(event))throw new HttpsError('unauthenticated','Sign in to record this milestone.');
@@ -51,7 +52,7 @@ export async function recordCheckoutMilestone(uid:string) {
   try{const db=getFirestore();const ref=db.collection('experimentAccounts').doc(uid);await db.runTransaction(async tx=>{const snap=await tx.get(ref),a=snap.data();if(a && Date.now()<a.firstSeen+ATTRIBUTION_MS && !a.milestones?.checkout_started)tx.update(ref,{'milestones.checkout_started':Date.now()});});}catch{ /* Never block an authorised purchase for analytics. */ }
 }
 export const getExperimentReport=onCall(options,async request=>{
-  staging();if(request.auth?.token.email_verified!==true || request.auth.token.email?.toLowerCase()!=='gary@gardenersnotmechanics.com')throw new HttpsError('permission-denied','Administrator access is required.');
+  assertDeployment();if(request.auth?.token.email_verified!==true || request.auth.token.email?.toLowerCase()!=='gary@gardenersnotmechanics.com')throw new HttpsError('permission-denied','Administrator access is required.');
   const db=getFirestore();const [v,a,p]=await Promise.all([db.collection('experimentVisitors').where('experiment','==',EXPERIMENT).limit(5001).get(),db.collection('experimentAccounts').where('experiment','==',EXPERIMENT).limit(5001).get(),db.collection('commercialPayments').limit(10001).get()]);
   if(v.size>5000||a.size>5000||p.size>10000)throw new HttpsError('resource-exhausted','This report has reached its query limit. Export and analyse the underlying collections before continuing.');
   return experimentReport(v.docs.map(d=>({id:d.id.slice(EXPERIMENT.length+1),...d.data()})),a.docs.map(d=>d.data()),p.docs.map(d=>d.data()));

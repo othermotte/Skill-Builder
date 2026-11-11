@@ -1,4 +1,5 @@
 import { callableAppCheck } from './appCheck';
+import { deploymentPolicy, runtimeOptions } from './deploymentPolicy';
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { createHash } from "crypto";
@@ -6,27 +7,16 @@ import { normaliseEmail } from "./emailRoster";
 import { accessFor, BillingAccount } from './billingDomain';
 import { activeGrant, selectScenario, FREE_MICRO_SKILL_LIMIT, freeSkillLimit } from "./accessDomain";
 const options = {
+  ...runtimeOptions,
   ...callableAppCheck,
-  region: "europe-west1" as const,
-  maxInstances: 3,
-  serviceAccount:
-    "skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com",
 };
 export const freemiumEnabled = () => process.env.FREEMIUM_ENABLED === "true";
-export function stagingGuard() {
-  if (
-    freemiumEnabled() &&
-    process.env.GCLOUD_PROJECT !== "leadership-skill-builder-stg" &&
-    process.env.FUNCTIONS_EMULATOR !== "true"
-  ) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Freemium is currently restricted to staging.",
-    );
-  }
+export function deploymentGuard() {
+  try { deploymentPolicy(); }
+  catch (error: any) { throw new HttpsError('failed-precondition', error.message); }
 }
 function user(request: any) {
-  stagingGuard();
+  deploymentGuard();
   if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in.");
   if (request.auth.token.email_verified !== true)
     throw new HttpsError(

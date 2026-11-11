@@ -1,19 +1,26 @@
 steps:
-  # Deploy Firebase Cloud Functions first. These hold the Gemini API key and
-  # mint ephemeral Live tokens for authenticated users.
-  - name: 'node:22'
-    entrypoint: 'bash'
+  # The compatibility backend must exist before the new frontend is served.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
     args:
-      - '-c'
+      - -ceu
       - |
         test '$PROJECT_ID' = 'leadership-skill-builder-codex'
         test '$BRANCH_NAME' = 'main'
         test ! -f STAGING_ONLY
-        cd functions
+        test "$$(gcloud functions describe getAccessAccount --gen2 --region=europe-west1 --project=leadership-skill-builder-7aba5 --format='value(state)')" = ACTIVE
+  - name: node:22
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
         npm ci
-        npm run build
-        npx firebase-tools@latest deploy --only functions --project="leadership-skill-builder-7aba5" --non-interactive --force
-
+        npm --prefix functions ci
+        npm run typecheck
+        npm test
+        npm audit --omit=dev --audit-level=high
+        npm --prefix functions audit --omit=dev --audit-level=high
+        node scripts/prepare-production.mjs live
   # Build the container image (no API key needed — it's now in Cloud Functions)
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -40,6 +47,14 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+
+  - name: node:22
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        npm --prefix functions run build
+        npx firebase-tools@latest deploy --config firebase.production.json --only functions,firestore:rules --project=leadership-skill-builder-7aba5 --non-interactive
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/skill-builder/skill-builder:$BUILD_ID'

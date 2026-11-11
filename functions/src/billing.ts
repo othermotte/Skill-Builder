@@ -1,7 +1,7 @@
 import {recordCheckoutMilestone} from './experiment';
-import { stagingGuard, readAccess } from './access';
+import { deploymentGuard, readAccess } from './access';
 import { callableAppCheck } from './appCheck';
-const runtimeOptions = { region: 'europe-west1' as const, maxInstances: 3, serviceAccount: 'skill-builder-staging-runtime@leadership-skill-builder-stg.iam.gserviceaccount.com' };
+import { deploymentPolicy, validateStripeMode, runtimeOptions } from './deploymentPolicy';
 import { randomUUID } from 'node:crypto';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
@@ -15,8 +15,7 @@ const region = 'europe-west1' as const;
 const billingOptions = { ...runtimeOptions, region, secrets: [stripeKey] };
 export const commercialEnabled = () => process.env.BILLING_ENABLED === 'true';
 function billingGuard() {
-  stagingGuard();
-  if (process.env.GCLOUD_PROJECT !== 'leadership-skill-builder-stg' && process.env.FUNCTIONS_EMULATOR !== 'true') throw new HttpsError('failed-precondition', 'Billing is currently restricted to staging.');
+  deploymentGuard();
 }
 export function requireUser(request: any): string {
   billingGuard();
@@ -33,19 +32,17 @@ export function commercialDb() {
 }
 function stripeClient() {
   billingGuard();
-  if (process.env.STRIPE_MODE !== 'test') throw new HttpsError('failed-precondition', 'Skill Builder payments are currently restricted to test mode.');
   const key = stripeKey.value();
-  if (process.env.STRIPE_MODE === 'test' && !/^(sk|rk)_test_/.test(key || '')) throw new HttpsError('failed-precondition', 'Staging accepts only Stripe sandbox credentials.');
   if (!key) throw new HttpsError('failed-precondition', 'Payments are not configured yet.');
-  if (process.env.FUNCTIONS_EMULATOR === 'true' && !key.startsWith('sk_test_') && !key.startsWith('rk_test_')) {
-    throw new HttpsError('failed-precondition', 'Local billing requires a Stripe test key.');
-  }
+  try { validateStripeMode(key); }
+  catch (error: any) { throw new HttpsError('failed-precondition', error.message); }
   const fixturePort = process.env.FUNCTIONS_EMULATOR === 'true' ? Number(process.env.STRIPE_TEST_API_PORT || 0) : 0;
   return new Stripe(key, { maxNetworkRetries: 2, ...(fixturePort > 1024 && fixturePort < 65536 ? { host: '127.0.0.1', port: fixturePort, protocol: 'http' as const } : {}) });
 }
 function baseUrl() {
-  const url = new URL(process.env.APP_BASE_URL || 'https://leadership-skill-builder-staging-600309447137.europe-west1.run.app');
-  if (process.env.FUNCTIONS_EMULATOR !== 'true' && url.origin !== 'https://leadership-skill-builder-staging-600309447137.europe-west1.run.app') throw new HttpsError('failed-precondition', 'The staging return URL is invalid.');
+  const policy = deploymentPolicy();
+  const url = new URL(process.env.APP_BASE_URL || policy.origin);
+  if (process.env.FUNCTIONS_EMULATOR !== 'true' && url.origin !== policy.origin) throw new HttpsError('failed-precondition', 'The payment return URL does not match this deployment.');
   if (process.env.FUNCTIONS_EMULATOR !== 'true' && url.protocol !== 'https:') {
     throw new HttpsError('failed-precondition', 'Set the HTTPS application URL before enabling payments.');
   }
@@ -67,7 +64,7 @@ async function ensureAccount(uid: string): Promise<BillingAccount> {
 export async function accountState(uid: string) {
   const account = await ensureAccount(uid);
   const now = Date.now();
-  return { enabled: true, ...accessFor(account, now), testMode: true, offers: OFFER,
+  return { enabled: true, ...accessFor(account, now), testMode: deploymentPolicy().stripeMode === 'test', offers: OFFER,
     paymentStatus: account.subscriptionStatus || null,
     paymentsReady: Object.values(priceMap()).every(Boolean) && !!process.env.STRIPE_PORTAL_CONFIGURATION,
     hadPaidAccess: !!(account.passUntil || account.paidThrough),
@@ -105,7 +102,7 @@ export const createCheckoutSession = onCall({ ...billingOptions, ...callableAppC
   const priceId = priceMap()[plan];
   if (!priceId) throw new HttpsError('failed-precondition', 'This plan is not available yet.');
   const price = await stripe.prices.retrieve(priceId);
-  if (price.livemode || !price.active || price.currency !== 'usd' || price.unit_amount !== OFFER[plan].amount
+  if (price.livemode !== (deploymentPolicy().stripeMode === 'live') || !price.active || price.currency !== 'usd' || price.unit_amount !== OFFER[plan].amount
     || (price.recurring?.interval || null) !== OFFER[plan].interval || (price.recurring?.interval_count || 1) !== 1) {
     throw new HttpsError('failed-precondition', 'The payment price does not match the published plan.');
   }
@@ -173,7 +170,7 @@ async function syncSubscription(stripe: Stripe, subscriptionId: string, eventCre
   const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
   if (!account || account.customerId !== customer) throw new Error('Customer/account mismatch');
   const item = sub.items.data[0];
-  if (sub.livemode || sub.items.data.length !== 1 || item?.quantity !== 1) throw new Error('Unexpected subscription mode or items');
+  if (sub.livemode !== (deploymentPolicy().stripeMode === 'live') || sub.items.data.length !== 1 || item?.quantity !== 1) throw new Error('Unexpected subscription mode or items');
   const plan = Object.entries(priceMap()).find(([key, id]) => key !== 'month_pass' && id && id === item?.price.id)?.[0];
   if (plan !== 'monthly' && plan !== 'annual') throw new Error('Unrecognised subscription price');
   const invoice = typeof sub.latest_invoice === 'object' ? sub.latest_invoice : null;
@@ -200,7 +197,7 @@ export const stripeWebhook = onRequest({ ...billingOptions, secrets: [stripeKey,
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = await stripe.checkout.sessions.retrieve(event.data.object.id);
       const uid = session.metadata?.firebaseUid; const plan = session.metadata?.plan;
-      if (!uid || session.metadata?.app !== 'leadership-skill-builder' || !validPlan(plan) || session.livemode || session.client_reference_id !== uid || (session.payment_status !== 'paid' && !(plan !== 'month_pass' && session.mode === 'subscription' && session.payment_status === 'no_payment_required'))) { response.sendStatus(200); return; }
+      if (!uid || session.metadata?.app !== 'leadership-skill-builder' || !validPlan(plan) || session.livemode !== (deploymentPolicy().stripeMode === 'live') || session.client_reference_id !== uid || (session.payment_status !== 'paid' && !(plan !== 'month_pass' && session.mode === 'subscription' && session.payment_status === 'no_payment_required'))) { response.sendStatus(200); return; }
       const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
       const ref = db.collection('commercialAccounts').doc(uid);
       const account = (await ref.get()).data();
