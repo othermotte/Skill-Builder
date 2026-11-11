@@ -6,7 +6,7 @@ The agreed offers are US$14.99 for one calendar month without renewal, US$9.99 m
 
 ## Prerequisites
 
-1. Confirm the treatment of existing beta users and checkout tax settings with Gary. Preserve existing Firebase Auth UIDs, catalogue customisations and learning records. Apply any agreed complimentary access before enabling the new entitlement checks.
+1. Apply the approved 30-day beta access policy before enabling entitlement checks. Preserve existing Firebase Auth UIDs, catalogue customisations and learning records. Checkout uses the advertised final amounts without tax collection, as Gary confirmed on 11 November.
 2. Create a separate live Skill Builder product, three prices, billing portal configuration and webhook endpoint. Put their public IDs in `config/stripe.production.json`.
 3. Store the live key as `STRIPE_SECRET_KEY` and the production endpoint signing secret as `STRIPE_WEBHOOK_SECRET` in the production Firebase project's Secret Manager. Never put these values in Git or the frontend.
 4. Configure the production App Check provider and explicit domain restrictions. Its public site key belongs in `.env.production`; do not enable Firestore enforcement while the old frontend is still serving users.
@@ -14,7 +14,7 @@ The agreed offers are US$14.99 for one calendar month without renewal, US$9.99 m
 
 The reviewed beta-access script defaults to a dry run. Choose the agreed policy with `--policy=complimentary`, `--policy=trial30` or `--policy=free`; it writes an owner-only snapshot outside Git. Apply only that reviewed snapshot using `--apply --snapshot=/private/tmp/...json`. Successful application records a non-personal release marker in `config/launch.production.json`, which the release preflight requires. Existing profile and learning-history collections are never written by this migration.
 
-Gary confirmed on 11 November that existing beta users receive 30 days of full access and the advertised prices are final checkout amounts. These choices are recorded in `config/launch-decisions.production.json`; the setup and migration scripts reject conflicting policies. Apply the reviewed `trial30` snapshot before release, then use the same snapshot with `--finalize-launch-at=<verified UTC launch time>` after activation to set expiry exactly 30 days after launch. The pre-release expiry is provisional and must not be treated as the final beta deadline.
+Gary confirmed on 11 November that existing beta users receive 30 days of full access and the advertised prices are final checkout amounts, and no VAT, sales tax or GST is collected. These choices are recorded in `config/launch-decisions.production.json`; the setup and migration scripts reject conflicting policies. Apply the reviewed `trial30` snapshot before release, then use the same snapshot with `--finalize-launch-at=<verified UTC launch time>` after activation to set expiry exactly 30 days after launch. The pre-release expiry is provisional and must not be treated as the final beta deadline.
 
 Once the live server key is stored, `node scripts/configure-live-stripe.mjs --tax=final` configures the separate product, agreed final prices, portal and webhook idempotently, saves public IDs, and stores the signing secret directly in Secret Manager. Use that option only after Gary confirms final advertised amounts. It never prints secret values and never creates a charge or subscription.
 

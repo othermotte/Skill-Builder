@@ -4,6 +4,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 if(!process.argv.includes('--tax=final'))throw Error('Confirm final advertised checkout amounts before running with --tax=final.');
 const decisions=JSON.parse(readFileSync('config/launch-decisions.production.json','utf8'));
 if(decisions.checkoutPricePolicy!=='final-advertised-amounts')throw Error('The final-price launch decision has not been recorded.');
+if(decisions.taxCollection!=='none')throw Error('Confirm the approved no-tax launch configuration before running this setup.');
 const project='leadership-skill-builder-7aba5';
 const require=createRequire(process.cwd()+'/functions/package.json');
 const Stripe=require('stripe');
