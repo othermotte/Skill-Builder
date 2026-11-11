@@ -1,0 +1,7 @@
+{
+  "betaPolicy": "trial30",
+  "betaAccessDays": 30,
+  "betaWindowStartsAt": "verified-production-launch",
+  "checkoutPricePolicy": "final-advertised-amounts",
+  "approvedOn": "2026-11-11"
+}

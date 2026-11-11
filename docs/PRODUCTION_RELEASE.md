@@ -14,6 +14,8 @@ The agreed offers are US$14.99 for one calendar month without renewal, US$9.99 m
 
 The reviewed beta-access script defaults to a dry run. Choose the agreed policy with `--policy=complimentary`, `--policy=trial30` or `--policy=free`; it writes an owner-only snapshot outside Git. Apply only that reviewed snapshot using `--apply --snapshot=/private/tmp/...json`. Successful application records a non-personal release marker in `config/launch.production.json`, which the release preflight requires. Existing profile and learning-history collections are never written by this migration.
 
+Gary confirmed on 11 November that existing beta users receive 30 days of full access and the advertised prices are final checkout amounts. These choices are recorded in `config/launch-decisions.production.json`; the setup and migration scripts reject conflicting policies. Apply the reviewed `trial30` snapshot before release, then use the same snapshot with `--finalize-launch-at=<verified UTC launch time>` after activation to set expiry exactly 30 days after launch. The pre-release expiry is provisional and must not be treated as the final beta deadline.
+
 Once the live server key is stored, `node scripts/configure-live-stripe.mjs --tax=final` configures the separate product, agreed final prices, portal and webhook idempotently, saves public IDs, and stores the signing secret directly in Secret Manager. Use that option only after Gary confirms final advertised amounts. It never prints secret values and never creates a charge or subscription.
 
 ## Release order

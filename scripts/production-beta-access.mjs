@@ -4,9 +4,12 @@ import {createHash} from 'node:crypto';
 const project='leadership-skill-builder-7aba5';
 const policy=process.argv.find(a=>a.startsWith('--policy='))?.split('=')[1];
 if(!['complimentary','trial30','free'].includes(policy))throw Error('Choose --policy=complimentary, trial30 or free after confirming the beta-user policy.');
+const decisions=JSON.parse(readFileSync('config/launch-decisions.production.json','utf8'));
+if(decisions.betaPolicy!==policy)throw Error('The migration policy does not match the owner-approved launch decision.');
 const apply=process.argv.includes('--apply');
+const launchAtArgument=process.argv.find(a=>a.startsWith('--finalize-launch-at='))?.slice('--finalize-launch-at='.length);
 const snapshotPath=process.argv.find(a=>a.startsWith('--snapshot='))?.slice('--snapshot='.length);
-if(apply&&!snapshotPath)throw Error('Apply requires the reviewed --snapshot path.');
+if((apply||launchAtArgument)&&!snapshotPath)throw Error('Apply/finalisation requires the reviewed --snapshot path.');
 const token=execFileSync('gcloud',['auth','print-access-token'],{encoding:'utf8'}).trim();
 async function request(path,data){
  const r=await fetch(path,{method:data?'POST':'GET',headers:{Authorization:'Bearer '+token,'x-goog-user-project':project,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
@@ -25,13 +28,25 @@ else{
  writeFileSync(file,JSON.stringify(snapshot,null,2),{mode:0o600});
  console.log('Review snapshot saved with owner-only permissions:',file);
 }
-console.log(JSON.stringify({project,policy,accounts:snapshot.authUserCount,approvedAddresses:snapshot.emails.length,expiresAt:snapshot.expiresAt,uidDigest:snapshot.uidDigest,apply},null,2));
+const root='projects/'+project+'/databases/(default)/documents/';
+const org='launch-beta-'+new Date(snapshot.createdAt).toISOString().slice(0,10).replaceAll('-','');
+if(launchAtArgument){
+ const launchAt=Date.parse(launchAtArgument);
+ if(policy!=='trial30'||!Number.isFinite(launchAt)||launchAt>Date.now()||Date.now()-launchAt>86400000)throw Error('Finalisation requires the verified launch time from the last 24 hours and the 30-day beta policy.');
+ const name=root+'organisations/'+org;
+ const grant=await request('https://firestore.googleapis.com/v1/'+name);
+ if(grant.fields?.launchMigration?.stringValue!==snapshot.uidDigest||grant.fields?.migrationPolicy?.stringValue!=='trial30'||grant.fields?.revokedAt?.nullValue!==null)throw Error('The beta grant changed; review it before finalising the window.');
+ const expiresAt=launchAt+decisions.betaAccessDays*86400000;
+ await request('https://firestore.googleapis.com/v1/projects/'+project+'/databases/(default)/documents:commit',{writes:[{update:{name,fields:{expiresAt:{integerValue:String(expiresAt)},launchAt:{integerValue:String(launchAt)}}},updateMask:{fieldPaths:['expiresAt','launchAt']},currentDocument:{updateTime:grant.updateTime}}]});
+ const marker=JSON.parse(readFileSync('config/launch.production.json','utf8'));
+ writeFileSync('config/launch.production.json',JSON.stringify({...marker,activatedAt:launchAt,betaAccessUntil:expiresAt},null,2)+'\n');
+ console.log('Finalised beta access until exactly 30 days after verified production launch:',new Date(expiresAt).toISOString());process.exit(0);
+}
+console.log(JSON.stringify({project,policy,accounts:snapshot.authUserCount,approvedAddresses:snapshot.emails.length,provisionalExpiresAt:snapshot.expiresAt,uidDigest:snapshot.uidDigest,apply},null,2));
 if(!apply)process.exit(0);
 function recordPreparation(){writeFileSync('config/launch.production.json',JSON.stringify({betaPolicy:policy,authUserCount:snapshot.authUserCount,uidDigest:snapshot.uidDigest,accessPreparedAt:Date.now()},null,2)+'\n');}
 if(policy==='free'){recordPreparation();console.log('Free policy selected: no complimentary grants written. Existing account and learning records are untouched.');process.exit(0);}
 if(snapshot.emails.length>200)throw Error('Review a batched migration before applying more than 200 beta addresses.');
-const root='projects/'+project+'/databases/(default)/documents/';
-const org='launch-beta-'+new Date(snapshot.createdAt).toISOString().slice(0,10).replaceAll('-','');
 const existing=await fetch('https://firestore.googleapis.com/v1/'+root+'organisations/'+org,{headers:{Authorization:'Bearer '+token}});
 if(existing.status!==404)throw Error('The migration grant already exists or could not be checked. Review it before changing access.');
 const integer=n=>({integerValue:String(n)}),text=s=>({stringValue:s});

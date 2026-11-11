@@ -3,6 +3,8 @@ const phase=process.argv[2];
 if(!['prepare','live'].includes(phase))throw Error('Choose the prepare or live release phase.');
 const project='leadership-skill-builder-7aba5';
 const launch=JSON.parse(readFileSync('config/launch.production.json','utf8'));
+const decisions=JSON.parse(readFileSync('config/launch-decisions.production.json','utf8'));
+if(launch.betaPolicy!==decisions.betaPolicy||decisions.checkoutPricePolicy!=='final-advertised-amounts')throw Error('Release settings do not match the owner-approved beta and pricing decisions.');
 if(!['complimentary','trial30','free'].includes(launch.betaPolicy)||!Number.isFinite(launch.accessPreparedAt)||!/^[a-f0-9]{64}$/.test(launch.uidDigest))throw Error('The reviewed beta-user access migration must be completed before release.');
 const web=Object.fromEntries(readFileSync('.env.production','utf8').split('\n').filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const i=l.indexOf('=');return[l.slice(0,i),l.slice(i+1)]}));
 if(web.VITE_APP_ENV!=='production'||web.VITE_FIREBASE_PROJECT_ID!==project||!web.VITE_APP_CHECK_SITE_KEY)throw Error('Production Firebase and App Check configuration is incomplete.');

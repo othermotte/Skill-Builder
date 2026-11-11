@@ -2,6 +2,8 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {readFileSync,writeFileSync} from 'node:fs';
 if(!process.argv.includes('--tax=final'))throw Error('Confirm final advertised checkout amounts before running with --tax=final.');
+const decisions=JSON.parse(readFileSync('config/launch-decisions.production.json','utf8'));
+if(decisions.checkoutPricePolicy!=='final-advertised-amounts')throw Error('The final-price launch decision has not been recorded.');
 const project='leadership-skill-builder-7aba5';
 const require=createRequire(process.cwd()+'/functions/package.json');
 const Stripe=require('stripe');
