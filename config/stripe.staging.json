@@ -1,0 +1,12 @@
+{
+  "FREEMIUM_ENABLED": "true",
+  "BILLING_ENABLED": "true",
+  "STRIPE_MODE": "test",
+  "APP_BASE_URL": "https://leadership-skill-builder-staging-600309447137.europe-west1.run.app",
+  "STRIPE_PRODUCT_ID": "prod_VVqvr6GvXexQ3M",
+  "STRIPE_PRICE_MONTH_PASS": "price_1UUpE0JyYxDrdnux254mvcYq",
+  "STRIPE_PRICE_MONTHLY": "price_1UUpE0JyYxDrdnuxDQtyHL9o",
+  "STRIPE_PRICE_ANNUAL": "price_1UUpE0JyYxDrdnuxqRQ5xqGm",
+  "STRIPE_PORTAL_CONFIGURATION": "bpc_1UUpE1JyYxDrdnuxspEWtOUy",
+  "STRIPE_WEBHOOK_ENDPOINT": "we_1UUpE1JyYxDrdnuxoKqxpHDG"
+}

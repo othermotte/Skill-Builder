@@ -1,5 +1,6 @@
+import {identifyExperiment,trackExperiment} from './services/experiment';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { User, Scenario, Skill, PracticeSession, Role, FeedbackAnalysis, PracticeAttempt, MicroSkill, SkillSnapshot, SkillLibrary, InteractionMedium } from './types';
 import {
@@ -19,9 +20,13 @@ import {
   savePracticeAttempt,
   getSkillLibrary
 } from './services/firebase';
-import { auth } from './firebaseConfig';
+import { auth, stagingEnabled, freemiumEnabled } from './firebaseConfig';
+import { AccessAccount, getAccessAccount, chooseFreeScenario } from './services/access';
+import { BillingPanel } from './components/BillingPanel';
+import { AccessPanel } from './components/AccessPanel';
 import { generateSkillSnapshot, analyzePracticeReflection, getFeedbackForTranscript } from './services/geminiService';
 
+import { VerifyEmailPage } from './components/VerifyEmailPage';
 import { LoginPage } from './components/LoginPage';
 import { NetworkIcon } from './components/icons/NetworkIcon';
 import { DashboardPage } from './components/DashboardPage';
@@ -35,9 +40,14 @@ import { AssessmentLaunchPage } from './components/AssessmentLaunchPage';
 
 
 const App: React.FC = () => {
+  const loadGeneration = useRef(0);
   const [appUser, setAppUser] = useState<User | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [access, setAccess] = useState<AccessAccount | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [confirmScenario, setConfirmScenario] = useState<Scenario | null>(null);
+  const [choosingScenario, setChoosingScenario] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([]);
@@ -61,17 +71,24 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      loadGeneration.current += 1;
       setFirebaseUser(user);
+      setAppUser(null);
+      setAccess(null);
+      setPracticeSessions([]);
+      setPracticeAttempts([]);
       setIsAuthLoading(false);
       if (!user) {
         setAppUser(null);
+        setAccess(null);
       }
     });
     return () => unsubscribe();
   }, []);
 
   const loadAppData = async () => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || (freemiumEnabled && !firebaseUser.emailVerified)) return;
+    const generation = ++loadGeneration.current;
     setIsLoadingData(true);
     setDataLoadError(null);
     const loadStartedAt = performance.now();
@@ -93,7 +110,11 @@ const App: React.FC = () => {
         ]);
       }
 
+      const loadedAccess = freemiumEnabled ? await getAccessAccount() : null;
+      if (generation !== loadGeneration.current) return;
+      setAccess(loadedAccess);
       setAppUser(loadedAppUser);
+      if(freemiumEnabled)void identifyExperiment();
       setScenarios(loadedScenarios);
       setSkills(loadedSkills);
       setIsLoadingData(false);
@@ -105,6 +126,7 @@ const App: React.FC = () => {
         getPracticeAttempts(firebaseUser.uid),
         getSkillLibrary(),
       ]).then(([loadedSessions, loadedAttempts, loadedLibrary]) => {
+        if (generation !== loadGeneration.current) return;
         setPracticeSessions(loadedSessions);
         setPracticeAttempts(loadedAttempts);
         setAppLibrary(loadedLibrary);
@@ -113,6 +135,7 @@ const App: React.FC = () => {
         console.warn("[Startup] Background history data failed to load:", error);
       });
     } catch (error: any) {
+      if (generation !== loadGeneration.current) return;
       console.error("Data load error:", error);
       setDataLoadError(error.message);
       setIsLoadingData(false);
@@ -125,6 +148,13 @@ const App: React.FC = () => {
     }
   }, [firebaseUser, isAuthLoading]);
 
+  useEffect(() => {
+    if (!freemiumEnabled || !access?.fullAccess || !access.accessUntil) return;
+    const expiresAt = access.accessUntil;
+    const timer = setTimeout(() => { getAccessAccount().then(setAccess).catch(() => setAccess(null)); }, Math.min(2147483647, Math.max(1, expiresAt - Date.now() + 1000)));
+    return () => clearTimeout(timer);
+  }, [access]);
+
   const handleLogout = async () => {
     await logout();
     setAppUser(null);
@@ -133,6 +163,12 @@ const App: React.FC = () => {
   };
 
   const handleStartPractice = (scenario: Scenario) => {
+    setAccessError(null);
+    if (freemiumEnabled && !access) return;
+    if (freemiumEnabled && !access!.fullAccess) {
+      if (!access!.freeScenarioId) { setConfirmScenario(scenario); return; }
+      if (access!.freeScenarioId !== scenario.id) { setAccessError('Your free account includes your chosen scenario. Other scenarios require full access.'); return; }
+    }
     setSelectedScenario(scenario);
     setCurrentPracticeSession(null);
     setActiveMicroSkill(null);
@@ -145,6 +181,7 @@ const App: React.FC = () => {
     if (!selectedScenario) return;
     setInteractionMedium(medium);
     setActivePage('roleplay');
+    void trackExperiment('scenario_started');
     logEvent(appUser?.id!, 'assessor_lab_started', { scenarioId: selectedScenario.id, interactionMedium: medium });
   };
 
@@ -165,7 +202,7 @@ const App: React.FC = () => {
     setActiveMicroSkill(ms as MicroSkill);
 
     const feedback: FeedbackAnalysis = JSON.parse(currentPracticeSession.feedback!);
-    const snapshotData = await generateSkillSnapshot(ms.label, feedback.summary.overall_summary || "None", appUser.growth_memory || "None");
+    const snapshotData = await generateSkillSnapshot(ms.label, feedback.summary.overall_summary || "None", appUser.growth_memory || "None", selectedScenario.id, microSkillId);
     setSnapshot(snapshotData);
 
     setActivePracticeAttempt({
@@ -187,6 +224,7 @@ const App: React.FC = () => {
   const handlePracticeLoopStart = (medium: InteractionMedium) => {
     setInteractionMedium(medium);
     setActivePage('roleplay');
+    void trackExperiment('micro_started');
     logEvent(appUser?.id!, 'practice_loop_started', { microSkillId: activeMicroSkill?.id, interactionMedium: medium });
   };
 
@@ -206,6 +244,7 @@ const App: React.FC = () => {
         };
 
         if (isCompleted) {
+          void trackExperiment('micro_completed');
           attemptPayload.completedAt = new Date().toISOString();
         }
 
@@ -228,6 +267,7 @@ const App: React.FC = () => {
 
       // Diagnostic scenario flow: save the PracticeSession record normally
       const savedSession = await savePracticeSession(completedSession);
+      if(completedSession.status === 'completed')void trackExperiment('scenario_completed');
       setPracticeSessions(prev => [savedSession, ...prev]);
       setCurrentPracticeSession(savedSession);
 
@@ -244,6 +284,7 @@ const App: React.FC = () => {
     }
 
     if (isDiagnostic) {
+      void trackExperiment('feedback_viewed');
       setFeedbackInitialView('feedback'); // Always show Rubric after a fresh scenario
       setActivePage('feedback');
     } else {
@@ -310,14 +351,15 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (isAuthLoading) return renderLoader("Authenticating...");
     if (!firebaseUser) return <LoginPage />;
+    if (freemiumEnabled && !firebaseUser.emailVerified) return <VerifyEmailPage user={firebaseUser} onLogout={handleLogout} />;
     if (isLoadingData && !appUser) return renderLoader("Loading Labs...");
     if (dataLoadError) return <div className="p-12 text-center text-rose-500 font-bold">{dataLoadError}</div>;
-    if (!appUser) return renderLoader("Finalizing...");
+    if (!appUser || appUser.id !== firebaseUser.uid || (freemiumEnabled && !access)) return renderLoader("Finalising...");
 
     switch (activePage) {
       case 'dashboard':
         return <DashboardPage
-          currentUser={appUser} scenarios={scenarios} skills={skills}
+          currentUser={appUser} access={access} scenarios={scenarios} skills={skills}
           practiceSessions={practiceSessions}
           practiceAttempts={practiceAttempts}
           appLibrary={appLibrary}
@@ -330,6 +372,7 @@ const App: React.FC = () => {
             setSelectedScenario(scenario || null);
             setCurrentPracticeSession(s);
             setFeedbackInitialView(initialView);
+            if(initialView==='feedback')void trackExperiment('feedback_viewed');
             setActivePage('feedback');
           }}
         />;
@@ -362,6 +405,8 @@ const App: React.FC = () => {
           onBackToDashboard={() => setActivePage('dashboard')}
           onViewHistory={() => setActivePage('history')}
           onBeginPracticeLoop={handleBeginPracticeLoop}
+          allowMoreRecommendations={!freemiumEnabled || !!access?.fullAccess}
+          freeMicroSkillLimit={access?.freeMicroSkillLimit || 3}
           initialView={feedbackInitialView}
           onSessionUpdate={(updatedSession) => {
             setCurrentPracticeSession(updatedSession);
@@ -427,6 +472,11 @@ const App: React.FC = () => {
           </div>
         </header>
       )}
+      {stagingEnabled && <div className="bg-amber-100 text-amber-950 text-center p-3 text-sm">Skill Builder staging. Separate test accounts and data.</div>}
+      {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <AccessPanel access={access} email={appUser.email} scenarioTitle={scenarios.find(s => s.id === access.freeScenarioId)?.title} />}
+      {accessError && <div role="alert" className="p-5 text-center bg-amber-50">{accessError} <button onClick={() => setAccessError(null)} className="underline">Dismiss</button></div>}
+      {freemiumEnabled && firebaseUser && appUser && access && activePage === 'dashboard' && <BillingPanel uid={firebaseUser.uid} access={access} onRefresh={async () => { const updated = await getAccessAccount(); if (auth.currentUser?.uid === firebaseUser.uid) setAccess(updated); }} />}
+      {confirmScenario && <div role="dialog" aria-modal="true" aria-labelledby="scenario-choice-title" className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4"><div className="bg-white rounded-3xl p-8 max-w-lg space-y-5 max-h-[85dvh] overflow-y-auto"><h2 id="scenario-choice-title" className="text-2xl font-bold">Choose {confirmScenario.title}?</h2><p>This will be your permanent free scenario. You can repeat its assessment and practise up to {access?.freeMicroSkillLimit || 3} micro skills recommended from your evaluation. Other scenarios require full access. You can keep browsing before making your choice.</p><details className="border rounded-xl p-3"><summary className="cursor-pointer font-semibold">Read the scenario</summary><p className="text-sm whitespace-pre-wrap mt-3">{confirmScenario.description}</p></details>{accessError && <p role="alert" className="text-rose-700 text-sm">{accessError}</p>}<button disabled={choosingScenario} className="bg-indigo-600 text-white p-3 rounded-xl disabled:opacity-50" onClick={async () => { const scenario = confirmScenario; setChoosingScenario(true); try { const updated = await chooseFreeScenario(scenario.id); setAccess(updated); setConfirmScenario(null); setSelectedScenario(scenario); setCurrentPracticeSession(null); setActiveMicroSkill(null); setPracticeType('diagnostic'); setInteractionMedium(null); setActivePage('assessment-launch'); } catch(e: any) { setAccessError(e.message); } finally { setChoosingScenario(false); } }}>{choosingScenario ? 'Saving…' : 'Confirm my free scenario'}</button> <button disabled={choosingScenario} onClick={() => setConfirmScenario(null)} className="p-3 underline">Keep browsing</button></div></div>}
       <main className="flex-grow w-full flex flex-col">{renderContent()}</main>
       {appUser && (
         <AppFeedbackModal 

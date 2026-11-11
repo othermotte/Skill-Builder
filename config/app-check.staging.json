@@ -1,0 +1,8 @@
+{
+  "siteKey": "6LdPpgkuAAAAAPWEA2Au9Wop7sISa2K-fDd3mxwD",
+  "allowedDomains": [
+    "leadership-skill-builder-staging-600309447137.europe-west1.run.app"
+  ],
+  "tokenTtl": "3600s",
+  "minValidScore": 0.5
+}

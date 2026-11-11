@@ -5,11 +5,13 @@ WORKDIR /app
 
 # Install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Build the application
 COPY . .
-RUN npm run build
+ARG BUILD_MODE=production
+RUN test "$BUILD_MODE" = staging || test ! -f STAGING_ONLY
+RUN npm run build -- --mode $BUILD_MODE
 
 # Runtime stage
 FROM node:22-alpine
@@ -17,14 +19,17 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Install a simple static server
-RUN npm install -g serve
+COPY runtime/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy build output from build stage
 COPY --from=build /app/dist ./dist
 
 # Cloud Run sets the PORT environment variable (defaults to 8080)
+COPY serve.json ./serve.json
+USER node
 ENV PORT=8080
 EXPOSE $PORT
 
 # Start the server
-CMD ["sh", "-c", "serve -s dist -l $PORT"]
+CMD ["sh", "-c", "./node_modules/.bin/serve -s dist -l $PORT --config /app/serve.json"]

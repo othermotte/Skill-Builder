@@ -36,3 +36,6 @@ setup/
 functions/lib/
 functions/node_modules/
 firebase-debug.log
+
+functions/.env.*
+staging-web-config.json

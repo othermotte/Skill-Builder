@@ -1,0 +1,10 @@
+{
+  "siteKey": "6Ler_BouAAAAAKowKRIXmVvLbauVkQnkXwxuobYv",
+  "allowedDomains": [
+    "leadershipskillbuilder.ai",
+    "www.leadershipskillbuilder.ai",
+    "leadership-skill-builder-ckyofu5gtq-ew.a.run.app"
+  ],
+  "tokenTtl": "3600s",
+  "minValidScore": 0.5
+}
