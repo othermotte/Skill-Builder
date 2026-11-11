@@ -2,5 +2,7 @@
   "betaPolicy": "trial30",
   "authUserCount": 81,
   "uidDigest": "d7358e7d64c64650c2d76d4905a5a9bf193f3fcd96e0000bf0ecadf91de345c2",
-  "accessPreparedAt": 1794391924138
+  "accessPreparedAt": 1794391924138,
+  "activatedAt": 1794392722000,
+  "betaAccessUntil": 1796984722000
 }
